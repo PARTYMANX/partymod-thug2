@@ -42,7 +42,7 @@ uint8_t get_misc_offsets() {
 	return result;
 }
 
-void findOffsets() {
+/*void findOffsets() {
 	printf("finding offsets...\n");
 
 	uint8_t result = 1;
@@ -58,7 +58,7 @@ void findOffsets() {
 	}
 
 	printf("done!\n");
-}
+}*/
 
 typedef struct {
 	float x;
@@ -270,13 +270,6 @@ void getModuleInfo() {
 	}
 
 	mod_size = (uint32_t)end_addr - (uint32_t)base_addr;
-}
-
-//uint8_t testpattern[17] = {0x83, 0xc4, 0x04, 0xe8, 0x00, 0x00, 0x00, 0x00, 0x8b, 0x0d, 0x00, 0x00, 0x00, 0x00, 0x51, 0x6a, 0x00};
-
-void findInitOffset() {
-	findPattern("83 c4 04 e8 ?? ?? ?? ?? 8b 0d ?? ?? ?? ?? 51 6a 00", base_addr, mod_size, &initAddr);
-	(uint8_t *)initAddr += 3;
 }
 
 void networkParamsWrapper(void *args) {

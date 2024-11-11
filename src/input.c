@@ -78,41 +78,6 @@ uint8_t *addr_unfocuspoll = 0x005f56e0;
 uint8_t *addr_procevents = 0x005f56e0;
 uint8_t *addr_recreatedevice = 0x00786ab4;
 
-uint8_t get_input_offsets() {
-	uint8_t *quitfocusAnchor = NULL;
-	uint8_t *proceventsAnchor = NULL;
-	uint8_t *recreatedeviceAnchor = NULL;
-
-	uint8_t result = 1;
-	result &= patch_cache_pattern("a0 ?? ?? ?? ?? 84 c0 75 1a a0 ?? ?? ?? ?? 84 c0 0f 84 a9 00 00 00", &key_input);
-	result &= patch_cache_pattern("8b 81 d8 00 00 00 48 c6 81 e4 00 00 00 00", &addr_device_processs);
-	result &= patch_cache_pattern("e8 ?? ?? ?? ?? 8b 8e d8 00 00 00 b8 02 00 00 00", &addr_call_device_read);
-	result &= patch_cache_pattern("83 ec 44 55 56 8b 74 24 50", &addr_set_actuators);
-	result &= patch_cache_pattern("6a 00 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 68 00 08 00 00 50 e8", &addr_init_dinput);
-	result &= patch_cache_pattern("e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? 6a 01 6a 00 6a 00", &addr_deinit_dinput);
-	result &= patch_cache_pattern("38 1d ?? ?? ?? ?? 74 c8 eb 07 c6 05 ?? ?? ?? ?? 01", &quitfocusAnchor);
-	result &= patch_cache_pattern("6a 00 6a 00 50 8d 4c 24 4c 51 ff 15", &addr_unfocuspoll);
-	//result &= patch_cache_pattern("83 ec 1c 56 8b 35 ?? ?? ?? ?? 6a 01", &addr_procevents);
-	result &= patch_cache_pattern("c6 05 ?? ?? ?? ?? 00 c6 05 ?? ?? ?? ?? 00 e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? e8", &proceventsAnchor);
-	result &= patch_cache_pattern("6a 01 6a 00 6a 00 a2 ?? ?? ?? ?? ff 15 ?? ?? ?? ?? 33 c0 c2 10 00", &recreatedeviceAnchor);
-
-	if (result) {
-		addr_isKeyboardOnScreen = *(uint32_t *)((uint8_t *)key_input + 1);
-		unk2 = *(uint32_t *)((uint8_t *)key_input + 10);
-		unk3 = *(uint32_t *)((uint8_t *)key_input + 23);
-		isFocused_again = *(uint32_t *)(quitfocusAnchor + 2);
-		shouldQuit = *(uint32_t *)(quitfocusAnchor + 12);
-		addr_procevents = *(uint32_t *)(proceventsAnchor + 20) + proceventsAnchor + 24;
-		addr_recreatedevice = *(uint32_t *)(recreatedeviceAnchor + 7);
-	} else {
-		printf("FAILED TO FIND INPUT OFFSETS\n");
-	}
-
-	//result &= find_ps2_control_offsets();
-
-	return result;
-}
-
 int controllerCount;
 int controllerListSize;
 SDL_GameController **controllerList;
@@ -330,24 +295,48 @@ void pollController(device *dev, SDL_GameController *controller) {
 		}
 
 		// shoulders
-		if (getButton(controller, padbinds.leftSpin)) {
-			dev->controlData[3] |= 0x01 << 2;
-			dev->controlData[16] = 0xff;
-		}
+		if (inputsettings.isPs2Controls) {
+			if (getButton(controller, padbinds.leftSpin)) {
+				dev->controlData[3] |= 0x01 << 2;
+				dev->controlData[16] = 0xff;
+			}
 
-		if (getButton(controller, padbinds.rightSpin)) {
-			dev->controlData[3] |= 0x01 << 3;
-			dev->controlData[17] = 0xff;
-		}
+			if (getButton(controller, padbinds.rightSpin)) {
+				dev->controlData[3] |= 0x01 << 3;
+				dev->controlData[17] = 0xff;
+			}
 
-		if (getButton(controller, padbinds.nollie)) {
-			dev->controlData[3] |= 0x01 << 0;
-			dev->controlData[18] = 0xff;
-		}
+			if (getButton(controller, padbinds.nollie)) {
+				dev->controlData[3] |= 0x01 << 0;
+				dev->controlData[18] = 0xff;
+			}
 
-		if (getButton(controller, padbinds.switchRevert)) {
-			dev->controlData[3] |= 0x01 << 1;
-			dev->controlData[19] = 0xff;
+			if (getButton(controller, padbinds.switchRevert)) {
+				dev->controlData[3] |= 0x01 << 1;
+				dev->controlData[19] = 0xff;
+			}
+		} else {
+			if (getButton(controller, padbinds.nollie)) {
+				dev->controlData[3] |= 0x01 << 2;
+				dev->controlData[16] = 0xff;
+				dev->controlData[3] |= 0x01 << 0;
+				dev->controlData[18] = 0xff;
+			}
+
+			if (getButton(controller, padbinds.switchRevert)) {
+				dev->controlData[3] |= 0x01 << 3;
+				dev->controlData[17] = 0xff;
+				dev->controlData[3] |= 0x01 << 1;
+				dev->controlData[19] = 0xff;
+			}
+
+			if (getButton(controller, padbinds.leftSpin)) {
+				dev->controlData[20] |= 0x01 << 1;
+			}
+
+			if (getButton(controller, padbinds.rightSpin)) {
+				dev->controlData[20] |= 0x01 << 0;
+			}
 		}
 		
 		// d-pad
@@ -367,27 +356,6 @@ void pollController(device *dev, SDL_GameController *controller) {
 			dev->controlData[2] |= 0x01 << 7;
 			dev->controlData[9] = 0xFF;
 		}
-
-		/*if (inputsettings.isPs2Controls) {
-			// big hack: bike backwards revert looks for white button specifically, so just bind that to the revert button when in ps2 mode as there are no side effects
-			if (getButton(controller, padbinds.switchRevert)) {
-				dev->controlData[20] |= 0x01 << 1;
-			} 
-
-			// this one's for park editor
-			if (getButton(controller, padbinds.rightSpin)) {
-				dev->controlData[20] |= 0x01 << 0;
-			}
-		} else {
-			if (getButton(controller, padbinds.nollie)) {
-				dev->controlData[20] |= 0x01 << 1;
-			}
-
-			// caveman
-			if (getButton(controller, padbinds.switchRevert)) {
-				dev->controlData[20] |= 0x01 << 0;
-			}
-		}*/
 		
 		// sticks
 		getStick(controller, padbinds.camera, &(dev->controlData[4]), &(dev->controlData[5]));
@@ -432,42 +400,43 @@ void pollKeyboard(device *dev) {
 		dev->controlData[15] = 0xff;
 	}
 
+	// shoulders
 	if (inputsettings.isPs2Controls) {
-		// big hack: bike backwards revert looks for white button specifically, so just bind that to the revert button when in ps2 mode as there are no side effects
-		if (keyboardState[keybinds.switchRevert]) {
-			dev->controlData[20] |= 0x01 << 1;
-		} 
-
+		if (keyboardState[keybinds.leftSpin]) {
+			dev->controlData[3] |= 0x01 << 2;
+			dev->controlData[16] = 0xff;
+		}
 		if (keyboardState[keybinds.rightSpin]) {
-			dev->controlData[20] |= 0x01 << 0;
+			dev->controlData[3] |= 0x01 << 3;
+			dev->controlData[17] = 0xff;
+		}
+		if (keyboardState[keybinds.nollie]) {
+			dev->controlData[3] |= 0x01 << 0;
+			dev->controlData[18] = 0xff;
+		}
+		if (keyboardState[keybinds.switchRevert]) {
+			dev->controlData[3] |= 0x01 << 1;
+			dev->controlData[19] = 0xff;
 		}
 	} else {
 		if (keyboardState[keybinds.nollie]) {
+			dev->controlData[3] |= 0x01 << 2;
+			dev->controlData[16] = 0xff;
+			dev->controlData[3] |= 0x01 << 0;
+			dev->controlData[18] = 0xff;
+		}
+		if (keyboardState[keybinds.switchRevert]) {
+			dev->controlData[3] |= 0x01 << 3;
+			dev->controlData[17] = 0xff;
+			dev->controlData[3] |= 0x01 << 1;
+			dev->controlData[19] = 0xff;
+		}
+		if (keyboardState[keybinds.leftSpin]) {
 			dev->controlData[20] |= 0x01 << 1;
 		}
-
-		// caveman
-		if (keyboardState[keybinds.switchRevert]) {
+		if (keyboardState[keybinds.rightSpin]) {
 			dev->controlData[20] |= 0x01 << 0;
 		}
-	}
-
-	// shoulders
-	if (keyboardState[keybinds.leftSpin]) {
-		dev->controlData[3] |= 0x01 << 2;
-		dev->controlData[16] = 0xff;
-	}
-	if (keyboardState[keybinds.rightSpin]) {
-		dev->controlData[3] |= 0x01 << 3;
-		dev->controlData[17] = 0xff;
-	}
-	if (keyboardState[keybinds.nollie]) {
-		dev->controlData[3] |= 0x01 << 0;
-		dev->controlData[18] = 0xff;
-	}
-	if (keyboardState[keybinds.switchRevert]) {
-		dev->controlData[3] |= 0x01 << 1;
-		dev->controlData[19] = 0xff;
 	}
 		
 	// d-pad
@@ -509,18 +478,18 @@ void pollKeyboard(device *dev) {
 	// left
 	// x
 	if (keyboardState[keybinds.left] && !keyboardState[keybinds.right]) {
-		dev->controlData[6] = (keyboardState[keybinds.feeble]) ? 64 : 0;
+		dev->controlData[6] = 0;
 	}
 	if (keyboardState[keybinds.right] && !keyboardState[keybinds.left]) {
-		dev->controlData[6] = (keyboardState[keybinds.feeble]) ? 192 : 255;
+		dev->controlData[6] = 255;
 	}
 
 	// y
 	if (keyboardState[keybinds.up] && !keyboardState[keybinds.down]) {
-		dev->controlData[7] = (keyboardState[keybinds.feeble]) ? 64 : 0;
+		dev->controlData[7] = 0;
 	}
 	if (keyboardState[keybinds.down] && !keyboardState[keybinds.up]) {
-		dev->controlData[7] = (keyboardState[keybinds.feeble]) ? 192 : 255;
+		dev->controlData[7] = 255;
 	}
 }
 

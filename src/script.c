@@ -715,6 +715,13 @@ void patchScriptHook() {
 	wrap_cfunc("IsXbox", isXboxWrapper, NULL);
 	wrap_cfunc("GetPlatform", getPlatformWrapper, &addr_getPlatform);
 
+	//patchByte(0x0064d80c, 'h');
+	/*patchByte(0x0041f062, 0xeb);
+	patchByte(0x005bd5be, 0xeb);
+	patchNop(0x0054f778, 6);
+	patchNop(0x00533599, 6);
+	patchNop(0x005b23c7, 2);*/
+
 	//patchJmp(addr_isps2, isPs2Wrapper);
 	//patchJmp(addr_ispc, isPCWrapper);
 
