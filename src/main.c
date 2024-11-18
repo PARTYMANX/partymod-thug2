@@ -19,9 +19,9 @@
 
 void *initAddr = NULL;
 
-void *addr_shuffle1;
-void *addr_shuffle2;
-void *addr_origrand;
+void *addr_shuffle1 = 0x004523a7;
+void *addr_shuffle2 = 0x004523b4;
+void *addr_origrand = 0x00403de0;
 uint32_t addr_camera_lookat;
 
 uint8_t get_misc_offsets() {
@@ -166,6 +166,31 @@ void patchCamera() {
 	//patchNop(0x00509244, 5);
 }
 
+struct flashVertex {
+	float x, y, z, w;
+	uint32_t color;
+	float u, v;
+};
+
+// vertices are passed into the render function in the wrong order when drawing screen flashes; reorder them before passing to draw
+void __fastcall reorder_flash_vertices(uint32_t *d3dDevice, uint32_t *maybedeviceagain, uint32_t *alsodevice, uint32_t prim, uint32_t count, struct flashVertex *vertices, uint32_t stride){
+	void(__fastcall *drawPrimitiveUP)(void *, void *, void *, uint32_t, uint32_t, struct flashVertex *, uint32_t) = maybedeviceagain[83];
+
+	struct flashVertex tmp;
+
+	tmp = vertices[0];
+	vertices[0] = vertices[1];
+	vertices[1] = vertices[2];
+	vertices[2] = tmp;
+
+	drawPrimitiveUP(d3dDevice, maybedeviceagain, alsodevice, prim, count, vertices, stride);
+}
+
+void patchScreenFlash() {
+	patchNop(0x004b91e7, 6);
+	patchCall(0x004b91e7, reorder_flash_vertices);
+}
+
 void our_random(int out_of) {
 	// first, call the original random so that we consume a value.  
 	// juuust in case someone wants actual 100% identical behavior between partymod and the original game
@@ -189,6 +214,81 @@ void installPatches() {
 	printf("installing script patches\n");
 	patchScriptHook();
 	printf("done\n");
+}
+
+/*uint32_t __fastcall calcAvailableSpaceFudged(uint8_t *param1) {
+	uint32_t *pTotalSpace = 0x0068ec38;
+	if (*(param1 + 0xc)) {
+		uint64_t freeSpace = 0;
+		uint64_t totalSpace = 0;
+		GetDiskFreeSpaceEx(NULL, &freeSpace, &totalSpace, NULL);
+
+
+	} else {
+		return 0;
+	}
+}*/
+
+char *allocOnlineServiceString(char *fmt, char *url) {
+	size_t outsize = strlen(fmt) + strlen(url) + 1;	// most likely oversized but it doesn't matter
+	char *result = malloc(outsize);
+
+	sprintf(result, fmt, url);
+
+	printf("ALLOC'D STRING %s\n", result);
+
+	return result;
+}
+
+void patchOnlineService(char *configFile) {
+	// NOTE: these will leak and that's a-okay
+	char *url[256];
+	GetPrivateProfileString("Miscellaneous", "OnlineDomain", "openspy.net", url, 256, configFile);
+
+	// gamestats.gamespy.com
+	char *gamestats = allocOnlineServiceString("gamestats.%s", url);
+	patchDWord(0x0054dd13 + 1, gamestats);
+	patchDWord(0x006025d8 + 1, gamestats);
+	patchDWord(0x00602618 + 1, gamestats);
+	patchDWord(0x00602650 + 2, gamestats);
+
+	// %s.available.gamespy.com
+	char *available = allocOnlineServiceString("%%s.available.%s", url);
+	patchDWord(0x005f86dd + 1, available);
+
+	// %s.master.gamespy.com
+	char *master = allocOnlineServiceString("%%s.master.%s", url);
+	patchDWord(0x005fb03b + 1, master);
+
+	// natneg2.gamespy.com
+	char *natneg2 = allocOnlineServiceString("natneg2.%s", url);
+	patchDWord(0x0068e380, natneg2);
+
+	// natneg1.gamespy.com
+	char *natneg1 = allocOnlineServiceString("natneg1.%s", url);
+	patchDWord(0x0068e37c, natneg1);
+
+	// http://motd.gamespy.com/motd/motd.asp?userid=%d&productid=%d&versionuniqueid=%s&distid=%d&uniqueid=%s&gamename=%s
+	char *motd = allocOnlineServiceString("http://motd.%s/motd/motd.asp?userid=%%d&productid=%%d&versionuniqueid=%%s&distid=%%d&uniqueid=%%s&gamename=%%s", url);
+	patchDWord(0x005ffd05 + 1, motd);
+
+	// peerchat.gamespy.com
+	char *peerchat = allocOnlineServiceString("peerchat.%s", url);
+	patchDWord(0x00605a4c + 1, peerchat);
+	patchDWord(0x00605aac + 1, peerchat);
+	patchDWord(0x00605b0e + 1, peerchat);
+
+	// %s.ms%d.gamespy.com
+	char *ms = allocOnlineServiceString("%%s.ms%%d.%s", url);
+	patchDWord(0x00612085 + 1, ms);
+
+	// gpcm.gamespy.com
+	char *gpcm = allocOnlineServiceString("gpcm.%s", url);
+	patchDWord(0x00617339 + 1, gpcm);
+
+	// gpsp.gamespy.com
+	char *gpsp = allocOnlineServiceString("gpsp.%s", url);
+	patchDWord(0x006182bd + 1, gpsp);
 }
 
 uint32_t rng_seed = 0;
@@ -231,6 +331,8 @@ void initPatch() {
 	srand(rng_seed);
 
 	printf("Patch Initialized\n");
+
+	patchOnlineService(configFile);
 
 	printf("BASE ADDR: 0x%08x, LEN: %d\n", base_addr, mod_size);
 	printf("FOUND ADDR: 0x%08x\n", initAddr);
@@ -297,6 +399,8 @@ __declspec(dllexport) BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, L
 			patchWindow();
 			patchInput();
 			patchScriptHook();
+			patchScreenFlash();
+			patchPlaylistShuffle();
 
 			break;
 

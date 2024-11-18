@@ -216,8 +216,28 @@ void writeConfigValues() {
 	*fog = graphics_settings.fog;
 }
 
+uint8_t getCurrentLevel() {
+	uint8_t **skate = (uint8_t *)0x007ce478;
+
+	if (*skate) {
+		uint8_t **career = *skate + 0x20;
+		return *(*career + 0x630);
+	} else {
+		return 0;
+	}
+}
+
+float getDesiredAspectRatio() {
+	// hack to detect main menu for aspect ratio shenanigans
+	if (getCurrentLevel() == 0) {
+		return 4.0f / 3.0f;
+	} else {
+		return ((float)resX / (float)resY);
+	}
+}
+
 float __cdecl getScreenAngleFactor() {
-	float aspect = ((float)resX / (float)resY);
+	float aspect = getDesiredAspectRatio();
 
 	float result = ((aspect / (4.0f / 3.0f)));
 
@@ -226,18 +246,100 @@ float __cdecl getScreenAngleFactor() {
 	//*viewportYMult = 1.0f;
 	//*viewportYOffset = 2;
 
+	*screenAspectRatio = aspect;
+
 	if (*orig_screenanglefactor != 1.0f)
 		return *orig_screenanglefactor;
 	else 
 		return result;
 }
 
-void __cdecl setLetterBox(uint8_t isLetterbox) {
-	
+void __cdecl setAspectRatio(float aspect) {
+	*screenAspectRatio = getDesiredAspectRatio();
 }
 
-void __cdecl setAspectRatio(float aspect) {
-	*screenAspectRatio = (float)resX / (float)resY;
+void setLetterbox(int isLetterboxed) {
+	//printf("SETTING LETTERBOX MODE: %d\n", isLetterboxed);
+
+	uint8_t *letterbox_active = 0x00786cbe;
+	float *conv_y_multiplier = 0x00786d84;
+	float *conv_x_multiplier = 0x00786d80;
+	uint32_t *conv_y_offset = 0x00786d8c;
+	uint32_t *conv_x_offset = 0x00786d88;
+	uint32_t *backbuffer_height = 0x00786d70;
+	uint32_t *backbuffer_width = 0x00786d6c;
+
+	//printf("Y OFFSET: %d, BACKBUFFER WIDTH: %d, BACKBUFFER HEIGHT: %d, MULTIPLIER: %f\n", *conv_y_offset, *backbuffer_width, *backbuffer_height, *conv_y_multiplier);
+
+	float backbufferAspect = (float)*backbuffer_width / (float)*backbuffer_height;
+	float desiredAspect = getDesiredAspectRatio();
+
+	//printf("BACKBUFFER: %f, DESIRED: %f\n", backbufferAspect, desiredAspect);
+
+	if (backbufferAspect > desiredAspect) {
+		*conv_x_multiplier = (desiredAspect / backbufferAspect) * (*backbuffer_width / 640.0f);
+		*conv_y_multiplier = *backbuffer_height / 480.0f;
+
+		uint32_t width = (*conv_x_multiplier) * 640;
+
+		*conv_x_offset = (*backbuffer_width - width) / 2;
+		*conv_y_offset = 16 * *conv_y_multiplier;
+	} else {
+		*conv_x_multiplier = *backbuffer_width / 640.0f;
+		*conv_y_multiplier = (backbufferAspect / desiredAspect) * (*backbuffer_height / 480.0f);
+
+		uint32_t height = (*conv_y_multiplier) * 480;
+
+		*conv_x_offset = 0;
+		*conv_y_offset = (16 * *conv_y_multiplier) + ((*backbuffer_height - height) / 2);
+	}
+
+	//printf("MULT X: %f, MULT Y: %f\n", *conv_x_multiplier, *conv_y_multiplier);
+	//printf("OFFSET X: %d, OFFSET Y: %d\n", *conv_x_offset, *conv_y_offset);
+
+	*letterbox_active = 1;
+}
+
+void setDisplayRegion() {
+	float *conv_y_multiplier = 0x00786d84;
+	float *conv_x_multiplier = 0x00786d80;
+	uint32_t *conv_y_offset = 0x00786d8c;
+	uint32_t *conv_x_offset = 0x00786d88;
+	uint32_t *backbuffer_height = 0x00786d70;
+	uint32_t *backbuffer_width = 0x00786d6c;
+	uint32_t *display_x = 0x00786c90;
+	uint32_t *display_y = 0x00786c94;
+	uint32_t *display_width = 0x00786c98;
+	uint32_t *display_height = 0x00786c9c;
+
+	// calculate screen size
+	uint32_t width = (*conv_x_multiplier) * 640;
+	uint32_t height = (*conv_y_multiplier) * 480;
+
+	*display_x = (*backbuffer_width - width) / 2;
+	*display_width = width;
+	*display_y = (*backbuffer_height - height) / 2;
+	*display_height = height;
+}
+
+void eventPollWrapper() {
+	void (*eventPoll)() = 0x005f56e0;
+	eventPoll();
+
+	setLetterbox(1);
+}
+
+void patchLetterbox() {
+	patchJmp(0x004b2440, setLetterbox);
+	//patchByte(0x004b2e63, 0xeb);
+	//patchByte(0x004b33c8, 0xeb);
+	patchByte(0x004df63a, 0xeb);	// fix letterboxed display
+
+	patchNop(0x004b2e65, 58);
+	patchCall(0x004b2e65, setDisplayRegion);
+
+	// hacky: wrap event poll in main loop with something to set letterbox if needed
+	patchCall(0x0044ef93, eventPollWrapper);
 }
 
 void patchWindow() {
@@ -255,6 +357,8 @@ void patchWindow() {
 
 	patchCall(addr_getscreenangfactor, getScreenAngleFactor);
 	patchByte(addr_getscreenangfactor, 0xe9);	// change CALL to JMP
+
+	patchLetterbox();
 }
 
 #define GRAPHICS_SECTION "Graphics"
