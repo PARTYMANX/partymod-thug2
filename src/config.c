@@ -329,17 +329,71 @@ void eventPollWrapper() {
 	setLetterbox(1);
 }
 
+#include <d3d9.h>
+
+struct blackBarVertex {
+	float x, y, z, w;
+	uint32_t color;
+	float u, v;
+};
+
+void draw2DWrapper() {
+	void (*draw2d)() = 0x004dfb90;
+	void (*setTexture)(int, int, int) = 0x004da730;
+	float *conv_x_multiplier = 0x00786d80;
+	uint32_t *conv_x_offset = 0x00786d88;
+	uint32_t *backbuffer_height = 0x00786d70;
+	uint32_t *backbuffer_width = 0x00786d6c;
+
+	draw2d();
+
+	float backbufferAspect = (float)*backbuffer_width / (float)*backbuffer_height;
+
+	if (backbufferAspect > getDesiredAspectRatio()) {
+		uint32_t width = (*conv_x_multiplier) * 640;
+		uint32_t barwidth = (*backbuffer_width - width) / 2;
+
+		setTexture(0, 0, 0);	// unbind texture
+
+		struct blackBarVertex blackBar[4] = {
+			{0.0f, 0.0f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+			{0.0f, *backbuffer_height, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+			{barwidth, *backbuffer_height, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+			{barwidth, 0.0f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+		};
+
+		IDirect3DDevice9_DrawPrimitiveUP(*(IDirect3DDevice9 **)0x007d69e0, D3DPT_TRIANGLEFAN, 4, blackBar, sizeof(struct blackBarVertex));
+
+		blackBar[0].x += width + barwidth;
+		blackBar[1].x += width + barwidth;
+		blackBar[2].x += width + barwidth;
+		blackBar[3].x += width + barwidth;
+
+		IDirect3DDevice9_DrawPrimitiveUP(*(IDirect3DDevice9 **)0x007d69e0, D3DPT_TRIANGLEFAN, 4, blackBar, sizeof(struct blackBarVertex));
+	}
+	
+}
+
 void patchLetterbox() {
 	patchJmp(0x004b2440, setLetterbox);
 	//patchByte(0x004b2e63, 0xeb);
 	//patchByte(0x004b33c8, 0xeb);
 	patchByte(0x004df63a, 0xeb);	// fix letterboxed display
 
+	// set viewport for rendering
+	// 3d
 	patchNop(0x004b2e65, 58);
 	patchCall(0x004b2e65, setDisplayRegion);
 
+	// 2d
+	patchNop(0x004b33ca, 35);
+	patchCall(0x004b33ca, setDisplayRegion);
+
 	// hacky: wrap event poll in main loop with something to set letterbox if needed
 	patchCall(0x0044ef93, eventPollWrapper);
+
+	// hacky: wrap draw 2d func to add black bars to cover overdraw
+	patchCall(0x004b341d, draw2DWrapper);
 }
 
 void patchWindow() {
