@@ -319,12 +319,12 @@ void initPatch() {
 
 	printf("DIRECTORY: %s\n", executableDirectory);
 
-	//init_patch_cache();
+	init_patch_cache();
 
 	//findOffsets();
 	//installPatches();
 
-	//initScriptPatches();
+	initScriptPatches();
 
 	// get some source of entropy for the music randomizer
 	rng_seed = time(NULL) & 0xffffffff;
@@ -382,6 +382,78 @@ void networkParamsWrapper(void *args) {
 	orig_networkParams(args);
 }
 
+char *buttonsPs2 = "ButtonsPs2";
+char *buttonsNgc = "ButtonsNgc";
+char *meta_button_map_ps2 = "meta_button_map_ps2";
+char *meta_button_map_gamecube = "meta_button_map_gamecube";
+
+// in the pc release, all button tags were translated from numbers to letters for some reason... maybe just menu ones?
+// either way, this wrapper re-translates them into the original numbers
+uint32_t dehexifyDigitWrapper(uint8_t *button) {
+	uint32_t (*orig_lookup)(uint8_t *) = 0x004020e0;
+
+	uint8_t val = *button;
+	switch (val) {
+	case 0x4D:
+	case 0x6D:
+		return 3;
+	case 0x4E:
+	case 0x6E:
+		return 2;
+	case 0x4F:
+	case 0x6F:
+		return 1;
+	case 0x50:
+	case 0x70:
+		return 0;
+	case 0x51:
+	case 0x71:
+		return 14;
+	case 0x52:
+	case 0x72:
+		return 15;
+	case 0x53:
+	case 0x73:
+		return 16;
+	case 0x54:
+	case 0x74:
+		return 17;
+	default:
+		return orig_lookup(button);
+	}
+}
+
+void patchButtonGlyphs() {
+	patchDWord(0x0048d97f + 4, buttonsPs2);
+	//patchDWord(0x0048d8f7 + 1, meta_button_map_ps2);
+	
+	// if button idx > 0x11, fall back to key output
+	patchByte(0x004cff36 + 1, 0x11);	// 0x04 -> 0x11
+	patchByte(0x004cff38, 0x77);	// JC -> JA
+	patchByte(0x004ced6d + 1, 0x11);	// 0x04 -> 0x11
+	patchByte(0x004ced6f, 0x77);	// JC -> JA
+
+	// else, jump to display button glyph
+	patchByte(0x004cff3a, 0xeb);	// write JMP
+	patchByte(0x004cff3a + 1, 0x6a);
+	patchByte(0x004ced71, 0xeb);	// write JMP
+	patchByte(0x004ced71 + 1, 0x62);
+
+	// wrap button lookup func
+	patchCall(0x004cff0c, dehexifyDigitWrapper);
+	patchCall(0x004ced4b, dehexifyDigitWrapper);
+}
+
+void setBlurWrapper(uint32_t blur) {
+	uint32_t *screen_blur = 0x00787328;
+
+	*screen_blur = 0;
+}
+
+void patchBlur() {
+	patchJmp(0x004b2330, setBlurWrapper);
+}
+
 __declspec(dllexport) BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
 	// Perform actions based on the reason for calling.
 	switch(fdwReason) { 
@@ -401,6 +473,8 @@ __declspec(dllexport) BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, L
 			patchScriptHook();
 			patchScreenFlash();
 			patchPlaylistShuffle();
+			patchButtonGlyphs();
+			patchBlur();
 
 			break;
 

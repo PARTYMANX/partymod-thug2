@@ -15,8 +15,7 @@
 
 // GetPlatform: 8b 0d ?? ?? ?? ?? 33 c0 49 83 f9 07 0f 87 8e 00 00 00	// make sure to look back at this one to see how it works
 
-INCBIN(groundtricks, "patches/groundtricks.bps");
-INCBIN(levelselect_scripts, "patches/levelselect_scripts.bps");
+INCBIN(keyboard, "patches/keyboard.bps");
 
 char scriptCacheFile[1024];
 
@@ -144,17 +143,17 @@ void initScriptPatches() {
 	cachedScriptMap = map_alloc(16, NULL, NULL);
 	scriptMap = map_alloc(16, NULL, NULL);
 
-	registerPatch("pak\\levelselect\\levelselect_scripts.qb.wpc", glevelselect_scriptsSize, glevelselect_scriptsData);
+	registerPatch("scripts\\engine\\menu\\keyboard.qb", gkeyboardSize, gkeyboardData);
 
-	printf("Loading script cache from %s...\n", scriptCacheFile);
-	loadScriptCache(scriptCacheFile);
-	printf("Done!\n");
+	//printf("Loading script cache from %s...\n", scriptCacheFile);
+	//loadScriptCache(scriptCacheFile);
+	//printf("Done!\n");
 }
 
-uint32_t (__cdecl *their_crc32)(char *) = (void *)0x00401b00;
+uint32_t (__cdecl *their_crc32)(char *) = (void *)0x00401b90;
 uint32_t (__cdecl *addr_parseqbsecondfunc)(uint32_t, char *) = (void *)0x0040a8f0;
-void (__cdecl *addr_parseqbthirdfunc)(uint8_t *, uint8_t *, void *, uint32_t, int) = (void *)0x0040a110;
-void *addr_parseqb = NULL;
+void (__cdecl *addr_parseqbthirdfunc)(uint8_t *, uint8_t *, void *, uint32_t, int) = (void *)0x0046ca50;
+void *addr_parseqb = 0x0046fba0;
 void *addr_unkparseqbfp = NULL;	// function pointer passed into third func
 void *addr_isps2 = 0x005b9e50;
 void *addr_isxenon = NULL;
@@ -631,7 +630,7 @@ uint8_t get_script_offsets() {
 // how do we cache patches correctly?
 // check if the patch exists, *then* check the cache.  hopefully we can also access the checksum easily as well.
 
-void __cdecl ParseQbWrapper(char *filename, uint8_t *script, int assertDuplicateSymbols) {
+/*void __cdecl ParseQbWrapper(char *filename, uint8_t *script, int assertDuplicateSymbols) {
 	uint8_t *scriptOut;
 
 	//printf("LOADING SCRIPT %s\n", filename);
@@ -707,6 +706,206 @@ void __cdecl ParseQbWrapper(char *filename, uint8_t *script, int assertDuplicate
 	addr_parseqbthirdfunc(scriptOut, scriptOut, addr_unkparseqbfp, crc, idk & 0xffffff00 | (assertDuplicateSymbols != 0));
 
 	script[0] = 1;
+}*/
+
+uint8_t *patchQb(char *filename, uint8_t *script, int assertDuplicateSymbols) {
+	uint8_t *scriptOut;
+
+	//printf("LOADING SCRIPT %s\n", filename);
+
+	size_t filenameLen = strlen(filename);
+	uint8_t *patch = map_get(patchMap, filename, filenameLen);
+	if (patch) {
+		uint32_t filesize = ((uint32_t *)script)[1];
+		scriptCacheEntry *cachedScript = map_get(cachedScriptMap, filename, filenameLen);
+
+		size_t patchLen = map_getsz(patchMap, filename, filenameLen);
+		uint32_t patchcrc = getPatchChecksum(patch, patchLen);
+
+		if (cachedScript && cachedScript->checksum == patchcrc) {
+			printf("Using cached patched script for %s\n", filename);
+
+			uint8_t *s = map_get(scriptMap, filename, filenameLen);
+			if (s) {
+				memcpy(s, cachedScript->script, cachedScript->scriptLen);	// rewrite script to memory
+			} else {
+				s = malloc(cachedScript->scriptLen);
+				memcpy(s, cachedScript->script, cachedScript->scriptLen);
+
+				map_put(scriptMap, filename, filenameLen, s, cachedScript->scriptLen);
+			}
+
+			scriptOut = s;
+		} else {
+			if (cachedScript) {
+				printf("Cached script checksum %08x didn't match patch %08x\n", cachedScript->checksum, patchcrc);
+			}
+
+			printf("Applying patch for %s\n", filename);
+			uint8_t *patchedBuffer = NULL;
+			size_t patchedBufferLen = 0;
+
+			int result = applyPatch(patch, patchLen, script, filesize, &patchedBuffer, &patchedBufferLen);
+				
+			if (!result) {
+				printf("Patch succeeded! Writing to cache...\n");
+
+				scriptCacheEntry entry;
+				entry.filenameLen = filenameLen;
+				entry.filename = malloc(filenameLen + 1);
+				memcpy(entry.filename, filename, filenameLen);
+				entry.filename[filenameLen] = '\0';
+				entry.checksum = getPatchChecksum(patch, patchLen);
+				entry.scriptLen = patchedBufferLen;
+				entry.script = malloc(patchedBufferLen);
+				memcpy(entry.script, patchedBuffer, patchedBufferLen);
+
+				map_put(cachedScriptMap, filename, filenameLen, &entry, sizeof(scriptCacheEntry));
+
+				//saveScriptCache(scriptCacheFile);
+
+				printf("Done!\n");
+
+				map_put(scriptMap, filename, filenameLen, patchedBuffer, patchedBufferLen);
+
+				scriptOut = patchedBuffer;
+			} else {
+				scriptOut = script;
+				printf("Patch failed! Continuing with original script\n");
+			}
+		}
+	} else {
+		scriptOut = script;
+	}
+}
+
+void __cdecl parseQbWrapper(char *filename, uint8_t *script, int assertDuplicateSymbols) {
+	void (__cdecl *orig_parseQb)(char *filename, uint8_t *script, int assertDuplicateSymbols) = 0x0046fba0;
+
+	printf("LOADING SCRIPT %s\n", filename);
+
+	uint8_t *scriptOut = patchQb(filename, script, assertDuplicateSymbols);
+
+	if (scriptOut) {
+		orig_parseQb(filename, scriptOut, assertDuplicateSymbols);
+	} else {
+		orig_parseQb(filename, script, assertDuplicateSymbols);
+	}
+}
+
+void __cdecl parseQbWrapper2(char *filename, uint8_t *script, int assertDuplicateSymbols, int unk, int unk2) {
+	void (__cdecl *orig_parseQb)(char *filename, uint8_t *script, int assertDuplicateSymbols) = 0x00472420;
+
+	printf("LOADING SCRIPT %s\n", filename);
+
+	uint8_t *scriptOut = patchQb(filename, script, assertDuplicateSymbols);
+
+	if (scriptOut) {
+		orig_parseQb(filename, scriptOut, assertDuplicateSymbols, unk, unk2);
+	} else {
+		orig_parseQb(filename, script, assertDuplicateSymbols, unk, unk2);
+	}
+}
+
+uint32_t *findLoadedFile(uint32_t checksum) {
+	
+}
+
+void __cdecl pipLoadWrapper(char *filename, int unk1, int unk2, int unk3, int unk4) {
+	uint8_t *(__cdecl *orig_pipLoad)(char *, int, int, int, int) = 0x005b7c00;
+	uint32_t (__cdecl *getFileSize)(uint32_t) = 0x005b7290;
+	uint32_t (__cdecl *their_crc32)(char *) = (void *)0x00401b90;
+
+	//printf("LOADING SCRIPT %s\n", filename);
+
+	uint8_t *filedata = orig_pipLoad(filename, unk1, unk2, unk3, unk4);
+	uint32_t filesize = getFileSize(their_crc32(filename));
+
+	//printf("FILE SIZE IS %d\n", filesize);
+
+	uint8_t *scriptOut;
+
+
+	// TODO: cache script to avoid continuous leak
+	size_t filenameLen = strlen(filename);
+	uint8_t *patch = map_get(patchMap, filename, filenameLen);
+	if (patch) {
+		//uint32_t filesize = ((uint32_t *)script)[1];
+		scriptCacheEntry *cachedScript = map_get(cachedScriptMap, filename, filenameLen);
+
+		size_t patchLen = map_getsz(patchMap, filename, filenameLen);
+		uint32_t patchcrc = getPatchChecksum(patch, patchLen);
+
+		if (cachedScript && cachedScript->checksum == patchcrc) {
+			printf("Using cached patched script for %s\n", filename);
+
+			uint8_t *s = map_get(scriptMap, filename, filenameLen);
+			if (s) {
+				memcpy(s, cachedScript->script, cachedScript->scriptLen);	// rewrite script to memory
+			} else {
+				s = malloc(cachedScript->scriptLen);
+				memcpy(s, cachedScript->script, cachedScript->scriptLen);
+
+				map_put(scriptMap, filename, filenameLen, s, cachedScript->scriptLen);
+			}
+
+			scriptOut = s;
+		} else {
+			if (cachedScript) {
+				printf("Cached script checksum %08x didn't match patch %08x\n", cachedScript->checksum, patchcrc);
+			}
+
+			printf("Applying patch for %s\n", filename);
+			uint8_t *patchedBuffer = NULL;
+			size_t patchedBufferLen = 0;
+
+			int result = applyPatch(patch, patchLen, filedata, filesize, &patchedBuffer, &patchedBufferLen);
+				
+			if (!result) {
+				printf("Patch succeeded! Writing to cache...\n");
+
+				scriptCacheEntry entry;
+				entry.filenameLen = filenameLen;
+				entry.filename = malloc(filenameLen + 1);
+				memcpy(entry.filename, filename, filenameLen);
+				entry.filename[filenameLen] = '\0';
+				entry.checksum = getPatchChecksum(patch, patchLen);
+				entry.scriptLen = patchedBufferLen;
+				entry.script = malloc(patchedBufferLen);
+				memcpy(entry.script, patchedBuffer, patchedBufferLen);
+
+				map_put(cachedScriptMap, filename, filenameLen, &entry, sizeof(scriptCacheEntry));
+
+				//saveScriptCache(scriptCacheFile);
+
+				printf("Done!\n");
+
+				map_put(scriptMap, filename, filenameLen, patchedBuffer, patchedBufferLen);
+
+				scriptOut = patchedBuffer;
+			} else {
+				scriptOut = filedata;
+
+				/*printf("WRITING TO FILE\n");
+				char *fileoutbuffer[1024];
+				sprintf(fileoutbuffer, "scriptsout\\%s", filename);
+				printf("????\n");
+				FILE *file = fopen(fileoutbuffer, "wb");
+				printf("TEST\n");
+				if (file) {
+					fwrite(filedata, 1, filesize, file);
+					printf("TEST\n");
+					fclose(file);
+				}*/
+
+				printf("Patch failed! Continuing with original script\n");
+			}
+		}
+	} else {
+		scriptOut = filedata;
+	}
+
+	return scriptOut;
 }
 
 void patchScriptHook() {
@@ -714,6 +913,13 @@ void patchScriptHook() {
 	wrap_cfunc("IsWIN32", isPCWrapper, NULL);
 	wrap_cfunc("IsXbox", isXboxWrapper, NULL);
 	wrap_cfunc("GetPlatform", getPlatformWrapper, &addr_getPlatform);
+
+	patchCall(0x0046ee80, pipLoadWrapper);
+
+	/*patchCall(0x0046eda7, parseQbWrapper);
+	patchCall(0x0046ee50, parseQbWrapper);
+	patchCall(0x0046edc9, parseQbWrapper2);
+	patchCall(0x0046eea3, parseQbWrapper2);*/
 
 	//patchByte(0x0064d80c, 'h');
 	/*patchByte(0x0041f062, 0xeb);
