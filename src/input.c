@@ -464,14 +464,43 @@ void pollController(device *dev, SDL_GameController *controller) {
 	}
 }
 
+uint32_t escState = 0;
+
+uint8_t isInParkEditor() {
+	void **ScreenElementManager = 0x00701440;
+	uint32_t *(__fastcall *ScreenElementManager_GetElement)(void *, void *, void *, uint32_t, uint32_t) = 0x004aae20;
+	if (ScreenElementManager) {
+		int unk[4] = {0, 0, 0, 0};	// honestly, a complete mystery to me.  this seems to be the same thing returned?  is this some compiler magic for struct returns?
+
+		uint32_t *result = ScreenElementManager_GetElement(*ScreenElementManager, NULL, unk, 0x5999551E, 0);
+
+		if (result && *result) {
+			return 1;
+		} else {
+			return 0;
+		}
+	} else {
+		return 0;
+	}
+}
+
 void pollKeyboard(device *dev) {
 	dev->isValid = 1;
 	dev->isPluggedIn = 1;
 
 	uint8_t *keyboardState = SDL_GetKeyboardState(NULL);
+	uint8_t isInMenu = *addr_isInMenu && !isInParkEditor();
+
+	// to prevent esc double-pressing on menu transitions, process its state here.  
+	// escState = 1 means esc was pressed in menu, 2 means pressed out of menu, 0 is unpressed
+	if (keyboardState[SDL_SCANCODE_ESCAPE] && !escState) {
+		escState = (isInMenu) ? 1 : 2;
+	} else if (!keyboardState[SDL_SCANCODE_ESCAPE]) {
+		escState = 0;
+	}
 
 	// buttons
-	if (keyboardState[keybinds.menu]) {
+	if ((keybinds.menu != SDL_SCANCODE_ESCAPE && keyboardState[keybinds.menu]) || escState == 2) {	// NOTE: menu is also always hardcoded to esc
 		dev->controlData[2] |= 0x01 << 3;
 	}
 	if (keyboardState[keybinds.cameraToggle]) {
@@ -484,30 +513,30 @@ void pollKeyboard(device *dev) {
 		dev->controlData[2] |= 0x01 << 2;
 	}
 
-	if (keyboardState[keybinds.grind]) {
+	if (keyboardState[keybinds.grind] || (isInMenu && keyboardState[SDL_SCANCODE_R])) {
 		dev->controlData[3] |= 0x01 << 4;
 		dev->controlData[12] = 0xff;
 	}
-	if (keyboardState[keybinds.grab]) {
+	if (keyboardState[keybinds.grab] || (isInMenu && escState == 1)) {
 		dev->controlData[3] |= 0x01 << 5;
 		dev->controlData[13] = 0xff;
 	}
-	if (keyboardState[keybinds.ollie]) {
+	if (keyboardState[keybinds.ollie] || (isInMenu && keyboardState[SDL_SCANCODE_RETURN])) {
 		dev->controlData[3] |= 0x01 << 6;
 		dev->controlData[14] = 0xff;
 	}
-	if (keyboardState[keybinds.kick]) {
+	if (keyboardState[keybinds.kick] || (isInMenu && keyboardState[SDL_SCANCODE_E])) {
 		dev->controlData[3] |= 0x01 << 7;
 		dev->controlData[15] = 0xff;
 	}
 
 	// shoulders
 	if (inputsettings.isPs2Controls) {
-		if (keyboardState[keybinds.leftSpin]) {
+		if (keyboardState[keybinds.leftSpin] || (isInMenu && keyboardState[SDL_SCANCODE_1])) {
 			dev->controlData[3] |= 0x01 << 2;
 			dev->controlData[16] = 0xff;
 		}
-		if (keyboardState[keybinds.rightSpin]) {
+		if (keyboardState[keybinds.rightSpin] || (isInMenu && keyboardState[SDL_SCANCODE_2])) {
 			dev->controlData[3] |= 0x01 << 3;
 			dev->controlData[17] = 0xff;
 		}
@@ -541,19 +570,19 @@ void pollKeyboard(device *dev) {
 	}
 		
 	// d-pad
-	if (keyboardState[keybinds.itemUp]) {
+	if (keyboardState[keybinds.itemUp] || (isInMenu && keyboardState[SDL_SCANCODE_UP])) {
 		dev->controlData[2] |= 0x01 << 4;
 		dev->controlData[10] = 0xFF;
 	}
-	if (keyboardState[keybinds.itemRight]) {
+	if (keyboardState[keybinds.itemRight] || (isInMenu && keyboardState[SDL_SCANCODE_RIGHT])) {
 		dev->controlData[2] |= 0x01 << 5;
 		dev->controlData[8] = 0xFF;
 	}
-	if (keyboardState[keybinds.itemDown]) {
+	if (keyboardState[keybinds.itemDown] || (isInMenu && keyboardState[SDL_SCANCODE_DOWN])) {
 		dev->controlData[2] |= 0x01 << 6;
 		dev->controlData[11] = 0xFF;
 	}
-	if (keyboardState[keybinds.itemLeft]) {
+	if (keyboardState[keybinds.itemLeft] || (isInMenu && keyboardState[SDL_SCANCODE_LEFT])) {
 		dev->controlData[2] |= 0x01 << 7;
 		dev->controlData[9] = 0xFF;
 	}
