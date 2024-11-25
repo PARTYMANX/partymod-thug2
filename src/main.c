@@ -18,9 +18,9 @@
 #include <glyph.h>
 #include <log.h>
 
-#define VERSION_NUMBER_MAJOR 0
+#define VERSION_NUMBER_MAJOR 1
 #define VERSION_NUMBER_MINOR 0
-#define VERSION_NUMBER_FIX 1
+#define VERSION_NUMBER_FIX 0
 
 void *addr_shuffle1 = 0x004523a7;
 void *addr_shuffle2 = 0x004523b4;
