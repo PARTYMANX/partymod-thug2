@@ -10,10 +10,18 @@ set(SOURCE_FILES
 	"${SRC}/patch.c"
 	"${SRC}/config.c"
 	"${SRC}/input.c"
-	"${SRC}/hash.c"
+	"${SRC}/util/hash.c"
 	"${SRC}/script.c"
 	"${SRC}/patches.c"
-	"${SRC}/patchcache.c"
+	"${SRC}/cfunc.c"
+	"${SRC}/gfx.c"
+	"${SRC}/net.c"
+	"${SRC}/window.c"
+	"${SRC}/util/bps.c"
+	"${SRC}/event.c"
+	"${SRC}/log.c"
+	"${SRC}/util/sb.c"
+	"${SRC}/glyph.c"
 )
 
 set(HEADER_FILES
@@ -21,9 +29,17 @@ set(HEADER_FILES
 	"${SRC}/patch.h"
 	"${SRC}/config.h"
 	"${SRC}/input.h"
-	"${SRC}/hash.h"
+	"${SRC}/util/hash.h"
 	"${SRC}/script.h"
-	"${SRC}/patchcache.h"
+	"${SRC}/cfunc.h"
+	"${SRC}/gfx.h"
+	"${SRC}/net.h"
+	"${SRC}/window.h"
+	"${SRC}/util/bps.h"
+	"${SRC}/event.h"
+	"${SRC}/log.h"
+	"${SRC}/util/sb.h"
+	"${SRC}/glyph.h"
 )
 
 list(APPEND INCLUDES ${THIRDPARTY})

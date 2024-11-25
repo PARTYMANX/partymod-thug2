@@ -7,9 +7,9 @@
 
 #include <global.h>
 #include <patch.h>
-#include <patchcache.h>
 #include <config.h>
-#include <script.h>
+#include <event.h>
+#include <log.h>
 
 typedef struct {
 	uint32_t vtablePtr;
@@ -47,6 +47,106 @@ typedef struct {
 	uint32_t start_or_a_pressed;
 } device;
 
+struct keybinds {
+	SDL_Scancode menu;
+	SDL_Scancode cameraToggle;
+	SDL_Scancode cameraSwivelLock;
+	SDL_Scancode focus;
+	SDL_Scancode caveman;
+
+	SDL_Scancode grind;
+	SDL_Scancode grab;
+	SDL_Scancode ollie;
+	SDL_Scancode kick;
+
+	SDL_Scancode leftSpin;
+	SDL_Scancode rightSpin;
+	SDL_Scancode nollie;
+	SDL_Scancode switchRevert;
+
+	SDL_Scancode right;
+	SDL_Scancode left;
+	SDL_Scancode up;
+	SDL_Scancode down;
+	SDL_Scancode feeble;
+
+	SDL_Scancode cameraRight;
+	SDL_Scancode cameraLeft;
+	SDL_Scancode cameraUp;
+	SDL_Scancode cameraDown;
+
+	SDL_Scancode itemRight;
+	SDL_Scancode itemLeft;
+	SDL_Scancode itemUp;
+	SDL_Scancode itemDown;
+};
+
+// a recreation of the SDL_GameControllerButton enum, but with the addition of right/left trigger
+typedef enum {
+	CONTROLLER_UNBOUND = -1,
+	CONTROLLER_BUTTON_A = SDL_CONTROLLER_BUTTON_A,
+	CONTROLLER_BUTTON_B = SDL_CONTROLLER_BUTTON_B,
+	CONTROLLER_BUTTON_X = SDL_CONTROLLER_BUTTON_X,
+	CONTROLLER_BUTTON_Y = SDL_CONTROLLER_BUTTON_Y,
+	CONTROLLER_BUTTON_BACK = SDL_CONTROLLER_BUTTON_BACK,
+	CONTROLLER_BUTTON_GUIDE = SDL_CONTROLLER_BUTTON_GUIDE,
+	CONTROLLER_BUTTON_START = SDL_CONTROLLER_BUTTON_START,
+	CONTROLLER_BUTTON_LEFTSTICK = SDL_CONTROLLER_BUTTON_LEFTSTICK,
+	CONTROLLER_BUTTON_RIGHTSTICK = SDL_CONTROLLER_BUTTON_RIGHTSTICK,
+	CONTROLLER_BUTTON_LEFTSHOULDER = SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+	CONTROLLER_BUTTON_RIGHTSHOULDER = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+	CONTROLLER_BUTTON_DPAD_UP = SDL_CONTROLLER_BUTTON_DPAD_UP,
+	CONTROLLER_BUTTON_DPAD_DOWN = SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+	CONTROLLER_BUTTON_DPAD_LEFT = SDL_CONTROLLER_BUTTON_DPAD_LEFT,
+	CONTROLLER_BUTTON_DPAD_RIGHT = SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
+	CONTROLLER_BUTTON_MISC1 = SDL_CONTROLLER_BUTTON_MISC1,
+	CONTROLLER_BUTTON_PADDLE1 = SDL_CONTROLLER_BUTTON_PADDLE1,
+	CONTROLLER_BUTTON_PADDLE2 = SDL_CONTROLLER_BUTTON_PADDLE2,
+	CONTROLLER_BUTTON_PADDLE3 = SDL_CONTROLLER_BUTTON_PADDLE3,
+	CONTROLLER_BUTTON_PADDLE4 = SDL_CONTROLLER_BUTTON_PADDLE4,
+	CONTROLLER_BUTTON_TOUCHPAD = SDL_CONTROLLER_BUTTON_TOUCHPAD,
+	CONTROLLER_BUTTON_RIGHTTRIGGER = 21,
+	CONTROLLER_BUTTON_LEFTTRIGGER = 22,
+} controllerButton;
+
+typedef enum {
+	CONTROLLER_STICK_UNBOUND = -1,
+	CONTROLLER_STICK_LEFT = 0,
+	CONTROLLER_STICK_RIGHT = 1
+} controllerStick;
+
+struct controllerbinds {
+	controllerButton menu;
+	controllerButton cameraToggle;
+	controllerButton cameraSwivelLock;
+	controllerButton focus;
+	controllerButton caveman;
+	// TODO: add spine button
+
+	controllerButton grind;
+	controllerButton grab;
+	controllerButton ollie;
+	controllerButton kick;
+
+	controllerButton leftSpin;
+	controllerButton rightSpin;
+	controllerButton nollie;
+	controllerButton switchRevert;
+
+	controllerButton right;
+	controllerButton left;
+	controllerButton up;
+	controllerButton down;
+
+	controllerStick movement;
+	controllerStick camera;
+};
+
+struct inputsettings {
+	uint8_t isPs2Controls;
+	uint8_t uicontrols;
+};
+
 void patchPs2Buttons();
 
 uint8_t *addr_platform = (void *)(0x0051f4c0);	// 83 f8 07 56 c7 44 24 04 00 00 00 00
@@ -63,9 +163,8 @@ uint8_t *addr_r2l2_walk_acid2 = (void *)(0x00527636);	// 8a 88 a0 00 00 00 83 c0
 uint8_t *addr_spin_delay1 = (void *)(0x00504239);	// 76 76 8b 4e 0c 68 43 db 57 49
 uint8_t *addr_spin_delay2 = (void *)(0x0050430b);	// 76 74 8b 4e 0c 68 43 db 57 49
 
-uint8_t *shouldQuit = 0x007d6a2c;	// 0084aa80
-uint8_t *isFocused_again = 0x007ccbe4;
 uint8_t *addr_isKeyboardOnScreen = 0x007ce46e;	// use key_input (+ 1)
+uint8_t *addr_isInMenu = 0x007ce46f;	// use key_input (+ 1)
 void (*key_input)(int32_t key, uint32_t param) = (void *)0x005bde70;	// a0 ?? ?? ?? ?? 84 c0 75 1a a0 ?? ?? ?? ?? 84 c0 0f 84 a9 00 00 00
 uint8_t *unk2 = 0x007ccdf8;	// use key_input (+10)
 uint8_t *unk3 = 0x007ce46f;	// use key_input (+23)
@@ -75,8 +174,6 @@ uint8_t *addr_set_actuators = 0x005f3a50; // 83 ec 44 55 56 8b 74 24 50
 uint8_t *addr_init_dinput = 0x005f459d; // 6a 00 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 68 00 08 00 00 50 e8
 uint8_t *addr_deinit_dinput = 0x005f39e0; // e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? 6a 01 6a 00 6a 00
 uint8_t *addr_unfocuspoll = 0x005f56e0;
-uint8_t *addr_procevents = 0x005f56e0;
-uint8_t *addr_recreatedevice = 0x00786ab4;
 
 int controllerCount;
 int controllerListSize;
@@ -100,8 +197,12 @@ void setUsingKeyboard(uint8_t usingKeyboard) {
 	isUsingKeyboard = usingKeyboard;
 }
 
+uint8_t getUsingKeyboard() {
+	return isUsingKeyboard;
+}
+
 void addController(int idx) {
-	printf("Detected controller \"%s\"\n", SDL_GameControllerNameForIndex(idx));
+	log_printf(LL_INFO, "Detected controller \"%s\"\n", SDL_GameControllerNameForIndex(idx));
 
 	SDL_GameController *controller = SDL_GameControllerOpen(idx);
 
@@ -146,27 +247,27 @@ void addplayer(SDL_GameController *controller) {
 			
 			numplayers++;
 
-			printf("Added player %d: %s\n", i + 1, SDL_GameControllerName(controller));
+			log_printf(LL_INFO, "Added player %d: %s\n", i + 1, SDL_GameControllerName(controller));
 		}
 	} else {
-		printf("Already two players, not adding\n");
+		log_printf(LL_INFO, "Already two players, not adding\n");
 	}
 }
 
 void pruneplayers() {
 	for (int i = 0; i < MAX_PLAYERS; i++) {
 		if (players[i].controller && !SDL_GameControllerGetAttached(players[i].controller)) {
-			printf("Pruned player %d\n", i + 1);
+			log_printf(LL_INFO, "Pruned player %d\n", i + 1);
 
 			players[i].controller = NULL;
 			numplayers--;
-			printf("Remaining players: %d\n", numplayers);
+			log_printf(LL_INFO, "Remaining players: %d\n", numplayers);
 		}
 	}
 }
 
 void removeController(SDL_GameController *controller) {
-	printf("Controller \"%s\" disconnected\n", SDL_GameControllerName(controller));
+	log_printf(LL_INFO, "Controller \"%s\" disconnected\n", SDL_GameControllerName(controller));
 
 	int i = 0;
 
@@ -179,7 +280,7 @@ void removeController(SDL_GameController *controller) {
 
 		int playerIdx = SDL_GameControllerGetPlayerIndex(controller);
 		if (playerIdx != -1) {
-			printf("Removed player %d\n", playerIdx + 1);
+			log_printf(LL_INFO, "Removed player %d\n", playerIdx + 1);
 			players[playerIdx].controller = NULL;
 			numplayers--;
 		}
@@ -192,12 +293,12 @@ void removeController(SDL_GameController *controller) {
 		controllerCount--;
 	} else {
 		//setActiveController(NULL);
-		printf("Did not find disconnected controller in list\n");
+		log_printf(LL_WARN, "Did not find disconnected controller in list\n");
 	}
 }
 
 void initSDLControllers() {
-	printf("Initializing Controller Input\n");
+	log_printf(LL_INFO, "Initializing Controller Input\n");
 
 	controllerCount = 0;
 	controllerListSize = 1;
@@ -498,8 +599,124 @@ uint8_t isKeyboardTyping() {
 	return *addr_isKeyboardOnScreen;
 }
 
+void __fastcall processController(device *dev, void *pad, device *also_dev) {
+	// cheating:
+	// replace type with index
+	//dev->type = 60;
+
+	//printf("Processing Controller %d %d %d!\n", dev->index, dev->slot, dev->port);
+	//printf("TYPE: %d\n", dev->type);
+	//printf("ISPLUGGEDIN: %d\n", dev->isPluggedIn);
+	dev->capabilities = 0x0003;
+	dev->num_actuators = 2;
+	dev->vibrationData_max[0] = 255;
+	dev->vibrationData_max[1] = 255;
+	dev->state = 2;
+	dev->actuatorsDisabled = 0;
+
+	handleEvents();
+
+	dev->isValid = 0;
+	dev->isPluggedIn = 0;
+
+	dev->controlData[0] = 0;
+	dev->controlData[1] = 0x70;
+
+	// buttons bitmap
+	// this bitmap may not work how you would expect. each bit is 1 if the button is *up*, not down
+	// the original code sets this initial value at 0xff and XOR's each button bit with the map
+	// this scheme cannot be continuously composited, so instead we OR each button with the bitmap and bitwise negate it after all controllers are processed
+	dev->controlData[2] = 0x00;
+	dev->controlData[3] = 0x00;
+
+	// buttons
+	dev->controlData[12] = 0;
+	dev->controlData[13] = 0;
+	dev->controlData[14] = 0;
+	dev->controlData[15] = 0;
+
+	// shoulders
+	dev->controlData[16] = 0;
+	dev->controlData[17] = 0;
+	dev->controlData[18] = 0;
+	dev->controlData[19] = 0;
+
+	// d-pad
+	dev->controlData[8] = 0;
+	dev->controlData[9] = 0;
+	dev->controlData[10] = 0;
+	dev->controlData[11] = 0;
+
+	// sticks
+	dev->controlData[4] = 127;
+	dev->controlData[5] = 127;
+	dev->controlData[6] = 127;
+	dev->controlData[7] = 127;
+
+	dev->controlData[20] = 0;
+
+	if (dev->port == 0) {
+		dev->isValid = 1;
+		dev->isPluggedIn = 1;
+
+		if (!isKeyboardTyping()) {
+			pollKeyboard(dev);
+		}
+	}
+	
+	if (dev->port < MAX_PLAYERS) {
+		if (players[dev->port].controller && !players[dev->port].lockedOut) {
+			pollController(dev, players[dev->port].controller);
+		}
+	}
+
+	dev->controlData[2] = ~dev->controlData[2];
+	dev->controlData[3] = ~dev->controlData[3];
+	//dev->controlData[20] = ~dev->controlData[20];
+
+	if (0xFFFF ^ ((dev->controlData[2] << 8 ) | dev->controlData[3])) {
+		dev->pressed = 1;
+	} else {
+		dev->pressed = 0;
+	}
+
+	if (~dev->controlData[2] & 0x01 << 3 || ~dev->controlData[3] & 0x01 << 6) {
+		dev->start_or_a_pressed = 1;
+	} else {
+		dev->start_or_a_pressed = 0;
+	}
+
+	// keyboard text entry doesn't work unless these values are set correctly
+
+	*unk2 = 1;
+	*unk3 = 0;
+
+	//printf("UNKNOWN VALUES: 0x0074fb42: %d, 0x00751dc0: %d, 0x0074fb43: %d\n", *unk1, *unk2, *unk3);
+}
+
+void __cdecl set_actuators(int port, uint16_t high, uint16_t low) {
+	//printf("SETTING ACTUATORS: %d %d %d\n", port, high, low);
+	for (int i = 0; i < controllerCount; i++) {
+		if (SDL_GameControllerGetAttached(controllerList[i]) && SDL_GameControllerGetPlayerIndex(controllerList[i]) == port) {
+			SDL_JoystickRumble(SDL_GameControllerGetJoystick(controllerList[i]), low, high, 0);
+		}
+	}
+}
+
 void do_key_input(SDL_KeyCode key) {
 	if (!*addr_isKeyboardOnScreen) {
+		if (key == SDLK_RETURN) {
+			key_input(0x19, 0);
+		} else if (key == SDLK_F1) {
+			key_input(0x1f, 0);
+		} else if (key == SDLK_F2) {
+			key_input(0x1c, 0);
+		} else if (key == SDLK_F3) {
+			key_input(0x1d, 0);
+		} else if (key == SDLK_F4) {
+			key_input(0x1e, 0);
+		}
+
 		return;
 	}
 
@@ -650,13 +867,13 @@ void do_key_input(SDL_KeyCode key) {
 	key_input(key_out, 0);
 }
 
-void processEvent(SDL_Event *e) {
+void handleInputEvent(SDL_Event *e) {
 	switch (e->type) {
 		case SDL_CONTROLLERDEVICEADDED:
 			if (SDL_IsGameController(e->cdevice.which)) {
 				addController(e->cdevice.which);
 			} else {
-				printf("Not a game controller: %s\n", SDL_JoystickNameForIndex(e->cdevice.which));
+				log_printf(LL_INFO, "Not a game controller: %s\n", SDL_JoystickNameForIndex(e->cdevice.which));
 			}
 			return;
 		case SDL_CONTROLLERDEVICEREMOVED: {
@@ -667,7 +884,7 @@ void processEvent(SDL_Event *e) {
 			return;
 		}
 		case SDL_JOYDEVICEADDED:
-			printf("Joystick added: %s\n", SDL_JoystickNameForIndex(e->jdevice.which));
+			log_printf(LL_INFO, "Joystick added: %s\n", SDL_JoystickNameForIndex(e->jdevice.which));
 			return;
 		case SDL_KEYDOWN: 
 			setUsingKeyboard(1);
@@ -699,153 +916,161 @@ void processEvent(SDL_Event *e) {
 		case SDL_CONTROLLERAXISMOTION:
 			setUsingKeyboard(0);
 			return;
-		case SDL_WINDOWEVENT:
-			if (e->window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
-				int *recreateDevice = (int *)addr_recreatedevice;
-				*recreateDevice = 0;
-
-				*isFocused_again = 0;
-			} else if (e->window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
-				*isFocused_again = 1;
-			}
-			return;
-		case SDL_QUIT: {
-			
-			*shouldQuit = 1;
-			return;
-		}
 		default:
 			return;
 	}
 }
 
-void processEvents() {
-	SDL_Event e;
-	while(SDL_PollEvent(&e)) {
-		processEvent(&e);
-	}
-}
+// LUT translating from SDL scancodes to directinput keycodes
+uint32_t DIK_LUT[256] = {
+	-1, -1, -1, -1, 0x1E, 0x30, 0x2E, 0x20,	// 0..7
+	0x12, 0x21, 0x22, 0x23, 0x17, 0x24, 0x25, 0x26,	// 8..15
+	0x32, 0x31, 0x18, 0x19, 0x10, 0x13, 0x1F, 0x14,	// 16..23
+	0x16, 0x2F, 0x11, 0x2D, 0x15, 0x2C, 0x02, 0x03,	// 24..31
+	0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,	// 32..39
+	0x1C, 0x01, 0x0E, 0x0F, 0x39, 0x0C, 0x0D, 0x1A,	// 40..47
+	0x1B, 0x2B, 0x2B, 0x27, 0x28, 0x29, 0x33, 0x34,	// 48..55
+	0x35, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40,	// 56..63
+	0x41, 0x42, 0x43, 0x44, 0x57, 0x58, -1, 0x46,	// 64..71
+	0xC5, 0xD2, 0xC7, 0xC9, 0xD3, 0xCF, 0xD1, 0xCD,	// 72..79
+	0xCB, 0xD0, 0xC8, 0x45, 0xB5, 0x37, 0x4A, 0x4E,	// 80..87
+	0x9C, 0x4F, 0x50, 0x51, 0x4B, 0x4C, 0x4D, 0x47,	// 88..95
+	0x48, 0x49, 0x52, 0x53, 0x2B, 0xDD, 0xDE, 0x8D,	// 96..103
+	0x64, 0x65, 0x66, -1, -1, -1, -1, -1,	// 104..111
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 112..119
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 120..127
+	0xB0, 0xAE, -1, -1, -1, 0xB3, -1, -1,	// 128..135
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 136..143
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 144..151
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 152..159
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 160..167
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 168..175
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 176..183
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 184..191
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 192..199
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 200..207
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 208..215
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 216..223
+	0x1D, 0x2A, 0x38, 0xDB, 0x9D, 0x36, 0xB8, 0xDC,	// 224..231
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 232..239
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 240..247
+	-1, -1, -1, -1, -1, -1, -1, -1,	// 248..255
+};
 
-void processEventsUnfocused() {
-	// called when window is unfocused so that window events are still processed
-
-	processEvents();
-
-	if (!*isFocused_again) {
-		SDL_Delay(10);
-	}
-}
-
-void __fastcall processController(device *dev, void *pad, device *also_dev) {
-	// cheating:
-	// replace type with index
-	//dev->type = 60;
-
-	//printf("Processing Controller %d %d %d!\n", dev->index, dev->slot, dev->port);
-	//printf("TYPE: %d\n", dev->type);
-	//printf("ISPLUGGEDIN: %d\n", dev->isPluggedIn);
-	dev->capabilities = 0x0003;
-	dev->num_actuators = 2;
-	dev->vibrationData_max[0] = 255;
-	dev->vibrationData_max[1] = 255;
-	dev->state = 2;
-	dev->actuatorsDisabled = 0;
-
-	SDL_Event e;
-	while(SDL_PollEvent(&e)) {
-		processEvent(&e);
-		//printf("EVENT!!!\n");
-	}
-
-	dev->isValid = 0;
-	dev->isPluggedIn = 0;
-
-	dev->controlData[0] = 0;
-	dev->controlData[1] = 0x70;
-
-	// buttons bitmap
-	// this bitmap may not work how you would expect. each bit is 1 if the button is *up*, not down
-	// the original code sets this initial value at 0xff and XOR's each button bit with the map
-	// this scheme cannot be continuously composited, so instead we OR each button with the bitmap and bitwise negate it after all controllers are processed
-	dev->controlData[2] = 0x00;
-	dev->controlData[3] = 0x00;
-
-	// buttons
-	dev->controlData[12] = 0;
-	dev->controlData[13] = 0;
-	dev->controlData[14] = 0;
-	dev->controlData[15] = 0;
-
-	// shoulders
-	dev->controlData[16] = 0;
-	dev->controlData[17] = 0;
-	dev->controlData[18] = 0;
-	dev->controlData[19] = 0;
-
-	// d-pad
-	dev->controlData[8] = 0;
-	dev->controlData[9] = 0;
-	dev->controlData[10] = 0;
-	dev->controlData[11] = 0;
-
-	// sticks
-	dev->controlData[4] = 127;
-	dev->controlData[5] = 127;
-	dev->controlData[6] = 127;
-	dev->controlData[7] = 127;
-
-	dev->controlData[20] = 0;
-
-	if (dev->port == 0) {
-		dev->isValid = 1;
-		dev->isPluggedIn = 1;
-
-		if (!isKeyboardTyping()) {
-			pollKeyboard(dev);
-		}
-	}
-	
-	if (dev->port < MAX_PLAYERS) {
-		if (players[dev->port].controller && !players[dev->port].lockedOut) {
-			pollController(dev, players[dev->port].controller);
-		}
-	}
-
-	dev->controlData[2] = ~dev->controlData[2];
-	dev->controlData[3] = ~dev->controlData[3];
-	//dev->controlData[20] = ~dev->controlData[20];
-
-	if (0xFFFF ^ ((dev->controlData[2] << 8 ) | dev->controlData[3])) {
-		dev->pressed = 1;
+int32_t translateSDLScancodeToDIK(SDL_Scancode scancode) {
+	if (scancode < 256) {
+		return DIK_LUT[scancode];
 	} else {
-		dev->pressed = 0;
+		return -1;
 	}
-
-	if (~dev->controlData[2] & 0x01 << 3 || ~dev->controlData[3] & 0x01 << 6) {
-		dev->start_or_a_pressed = 1;
-	} else {
-		dev->start_or_a_pressed = 0;
-	}
-
-	// keyboard text entry doesn't work unless these values are set correctly
-
-	*unk2 = 1;
-	*unk3 = 0;
-
-	//printf("UNKNOWN VALUES: 0x0074fb42: %d, 0x00751dc0: %d, 0x0074fb43: %d\n", *unk1, *unk2, *unk3);
 }
 
-void __cdecl set_actuators(int port, uint16_t high, uint16_t low) {
-	//printf("SETTING ACTUATORS: %d %d %d\n", port, high, low);
-	for (int i = 0; i < controllerCount; i++) {
-		if (SDL_GameControllerGetAttached(controllerList[i]) && SDL_GameControllerGetPlayerIndex(controllerList[i]) == port) {
-			SDL_JoystickRumble(SDL_GameControllerGetJoystick(controllerList[i]), low, high, 0);
-		}
+void writeNativeBinds() {
+	// configure binds for the purposes of control prompts
+
+	int32_t *binds = 0x007d6770;
+
+	binds[0] = translateSDLScancodeToDIK(keybinds.up);
+	binds[1] = translateSDLScancodeToDIK(keybinds.down);
+	binds[2] = translateSDLScancodeToDIK(keybinds.left);
+	binds[3] = translateSDLScancodeToDIK(keybinds.right);
+
+	binds[4] = translateSDLScancodeToDIK(keybinds.cameraUp);
+	binds[5] = translateSDLScancodeToDIK(keybinds.cameraDown);
+	binds[6] = translateSDLScancodeToDIK(keybinds.cameraLeft);
+	binds[7] = translateSDLScancodeToDIK(keybinds.cameraRight);
+
+	binds[8] = translateSDLScancodeToDIK(keybinds.ollie);
+	binds[9] = translateSDLScancodeToDIK(keybinds.grab);
+	binds[10] = translateSDLScancodeToDIK(keybinds.kick);
+	binds[11] = translateSDLScancodeToDIK(keybinds.grind);
+
+	binds[13] = translateSDLScancodeToDIK(keybinds.cameraToggle);
+	binds[14] = translateSDLScancodeToDIK(keybinds.leftSpin);
+	binds[15] = translateSDLScancodeToDIK(keybinds.rightSpin);
+	binds[16] = translateSDLScancodeToDIK(keybinds.nollie);
+	binds[17] = translateSDLScancodeToDIK(keybinds.switchRevert);
+	binds[18] = translateSDLScancodeToDIK(keybinds.focus);
+
+	binds[20] = translateSDLScancodeToDIK(keybinds.itemUp);
+	binds[21] = translateSDLScancodeToDIK(keybinds.itemDown);
+	binds[22] = translateSDLScancodeToDIK(keybinds.itemLeft);
+	binds[23] = translateSDLScancodeToDIK(keybinds.itemRight);
+}
+
+void loadInputSettings(struct inputsettings *settingsOut) {
+	if (settingsOut) {
+		settingsOut->isPs2Controls = getConfigBool(CONFIG_MISC_SECTION, "UsePS2Controls", 1);
+		settingsOut->uicontrols = (uint8_t)getConfigInt("Miscellaneous", "UIControls", 1);
+	}
+}
+
+void loadKeyBinds(struct keybinds *bindsOut) {
+	if (bindsOut) {
+		bindsOut->menu = getConfigInt(CONFIG_KEYBIND_SECTION, "Pause", SDL_SCANCODE_RETURN);
+		bindsOut->cameraToggle = getConfigInt(CONFIG_KEYBIND_SECTION, "ViewToggle", SDL_SCANCODE_F);
+		bindsOut->cameraSwivelLock = getConfigInt(CONFIG_KEYBIND_SECTION, "SwivelLock", SDL_SCANCODE_GRAVE);
+		bindsOut->focus = getConfigInt(CONFIG_KEYBIND_SECTION, "Focus", SDL_SCANCODE_KP_ENTER);
+		bindsOut->caveman = getConfigInt(CONFIG_KEYBIND_SECTION, "Caveman", SDL_SCANCODE_E);
+
+		bindsOut->grind = getConfigInt(CONFIG_KEYBIND_SECTION, "Grind", SDL_SCANCODE_KP_8);
+		bindsOut->grab = getConfigInt(CONFIG_KEYBIND_SECTION, "Grab", SDL_SCANCODE_KP_6);
+		bindsOut->ollie = getConfigInt(CONFIG_KEYBIND_SECTION, "Ollie", SDL_SCANCODE_KP_2);
+		bindsOut->kick = getConfigInt(CONFIG_KEYBIND_SECTION, "Flip", SDL_SCANCODE_KP_4);
+
+		bindsOut->leftSpin = getConfigInt(CONFIG_KEYBIND_SECTION, "SpinLeft", SDL_SCANCODE_KP_1);
+		bindsOut->rightSpin = getConfigInt(CONFIG_KEYBIND_SECTION, "SpinRight", SDL_SCANCODE_KP_3);
+		bindsOut->nollie = getConfigInt(CONFIG_KEYBIND_SECTION, "Nollie", SDL_SCANCODE_KP_7);
+		bindsOut->switchRevert = getConfigInt(CONFIG_KEYBIND_SECTION, "Switch", SDL_SCANCODE_KP_9);
+
+		bindsOut->right = getConfigInt(CONFIG_KEYBIND_SECTION, "Right", SDL_SCANCODE_D);
+		bindsOut->left = getConfigInt(CONFIG_KEYBIND_SECTION, "Left", SDL_SCANCODE_A);
+		bindsOut->up = getConfigInt(CONFIG_KEYBIND_SECTION, "Forward", SDL_SCANCODE_W);
+		bindsOut->down = getConfigInt(CONFIG_KEYBIND_SECTION, "Backward", SDL_SCANCODE_S);
+		bindsOut->feeble = getConfigInt(CONFIG_KEYBIND_SECTION, "Feeble", SDL_SCANCODE_LSHIFT);
+
+		bindsOut->cameraRight = getConfigInt(CONFIG_KEYBIND_SECTION, "CameraRight", SDL_SCANCODE_KP_MULTIPLY);
+		bindsOut->cameraLeft = getConfigInt(CONFIG_KEYBIND_SECTION, "CameraLeft", SDL_SCANCODE_KP_DIVIDE);
+		bindsOut->cameraUp = getConfigInt(CONFIG_KEYBIND_SECTION, "CameraUp", SDL_SCANCODE_KP_PLUS);
+		bindsOut->cameraDown = getConfigInt(CONFIG_KEYBIND_SECTION, "CameraDown", SDL_SCANCODE_KP_MINUS);
+
+		bindsOut->itemRight = getConfigInt(CONFIG_KEYBIND_SECTION, "ItemRight", SDL_SCANCODE_L);
+		bindsOut->itemLeft = getConfigInt(CONFIG_KEYBIND_SECTION, "ItemLeft", SDL_SCANCODE_J);
+		bindsOut->itemUp = getConfigInt(CONFIG_KEYBIND_SECTION, "ItemUp", SDL_SCANCODE_I);
+		bindsOut->itemDown = getConfigInt(CONFIG_KEYBIND_SECTION, "ItemDown", SDL_SCANCODE_K);
+	}
+}
+
+void loadControllerBinds(struct controllerbinds *bindsOut) {
+	if (bindsOut) {
+		bindsOut->menu = getConfigInt(CONFIG_CONTROLLER_SECTION, "Pause", CONTROLLER_BUTTON_START);
+		bindsOut->cameraToggle = getConfigInt(CONFIG_CONTROLLER_SECTION, "ViewToggle", CONTROLLER_BUTTON_BACK);
+		bindsOut->cameraSwivelLock = getConfigInt(CONFIG_CONTROLLER_SECTION, "SwivelLock", CONTROLLER_BUTTON_RIGHTSTICK);
+		bindsOut->focus = getConfigInt(CONFIG_CONTROLLER_SECTION, "Focus", CONTROLLER_BUTTON_LEFTSTICK);
+		bindsOut->caveman = getConfigInt(CONFIG_CONTROLLER_SECTION, "Caveman", 0);
+
+		bindsOut->grind = getConfigInt(CONFIG_CONTROLLER_SECTION, "Grind", CONTROLLER_BUTTON_Y);
+		bindsOut->grab = getConfigInt(CONFIG_CONTROLLER_SECTION, "Grab", CONTROLLER_BUTTON_B);
+		bindsOut->ollie = getConfigInt(CONFIG_CONTROLLER_SECTION, "Ollie", CONTROLLER_BUTTON_A);
+		bindsOut->kick = getConfigInt(CONFIG_CONTROLLER_SECTION, "Flip", CONTROLLER_BUTTON_X);
+
+		bindsOut->leftSpin = getConfigInt(CONFIG_CONTROLLER_SECTION, "SpinLeft", CONTROLLER_BUTTON_LEFTSHOULDER);
+		bindsOut->rightSpin = getConfigInt(CONFIG_CONTROLLER_SECTION, "SpinRight", CONTROLLER_BUTTON_RIGHTSHOULDER);
+		bindsOut->nollie = getConfigInt(CONFIG_CONTROLLER_SECTION, "Nollie", CONTROLLER_BUTTON_LEFTTRIGGER);
+		bindsOut->switchRevert = getConfigInt(CONFIG_CONTROLLER_SECTION, "Switch", CONTROLLER_BUTTON_RIGHTTRIGGER);
+
+		bindsOut->right = getConfigInt(CONFIG_CONTROLLER_SECTION, "Right", CONTROLLER_BUTTON_DPAD_RIGHT);
+		bindsOut->left = getConfigInt(CONFIG_CONTROLLER_SECTION, "Left", CONTROLLER_BUTTON_DPAD_LEFT);
+		bindsOut->up = getConfigInt(CONFIG_CONTROLLER_SECTION, "Forward", CONTROLLER_BUTTON_DPAD_UP);
+		bindsOut->down = getConfigInt(CONFIG_CONTROLLER_SECTION, "Backward", CONTROLLER_BUTTON_DPAD_DOWN);
+
+		bindsOut->movement = getConfigInt(CONFIG_CONTROLLER_SECTION, "MovementStick", CONTROLLER_STICK_LEFT);
+		bindsOut->camera = getConfigInt(CONFIG_CONTROLLER_SECTION, "CameraStick", CONTROLLER_STICK_RIGHT);
 	}
 }
 
 void __stdcall initManager() {
-	printf("Initializing Manager!\n");
+	log_printf(LL_INFO, "Initializing Input Manager!\n");
 
 	// init sdl here
 	SDL_Init(SDL_INIT_GAMECONTROLLER);
@@ -859,9 +1084,9 @@ void __stdcall initManager() {
 	if (result) {
 		result = SDL_GameControllerAddMappingsFromFile(controllerDbPath);
 		if (result) {
-			printf("Loaded mappings\n");
+			log_printf(LL_INFO, "Loaded mappings\n");
 		} else {
-			printf("Failed to load %s\n", controllerDbPath);
+			log_printf(LL_WARN, "Failed to load %s\n", controllerDbPath);
 		}
 		
 	}
@@ -873,42 +1098,18 @@ void __stdcall initManager() {
 	initSDLControllers();
 
 	if (inputsettings.isPs2Controls) {
-		registerPS2ControlPatch();
 		patchPs2Buttons();
 	}
+
+	writeNativeBinds();
+
+	registerEventHandler(handleInputEvent);
 
 	//setMenuControls(inputsettings.uicontrols);
 }
 
-// wrapper over the rolling friction calculation, provides easy access to the skater physics component
-void __fastcall rolling_friction_wrapper(void *comp) {
-	void (__fastcall *rolling_friction)(void *) = (void *)0x005c8ca0;
-
-	int compAddr = (int)comp;
-	float friction = *(float *)(compAddr + 0x678);
-	void *padAddr = *(void **)(compAddr + 0x1910);
-
-	int paddr = (int) padAddr;
-
-	uint8_t is_on_bike = *(uint8_t *)(compAddr + 0x524);
-
-	//printf("ROLLING FRICTION: %f\n", friction);
-	printf("CONTROL PAD ADDR: 0x%08x\n", padAddr);
-	//printf("ARE WE ON A BIKE: %d\n", is_on_bike);
-	printf("CONTROLS: 0x320: %d, 0x180: %d, 0x1a0: %d, 0x1c0: %d, 0x1e0: %d, 0x200: %d\n", *(uint8_t *)(paddr + 0x320), *(uint8_t *)(paddr + 0x340), *(uint8_t *)(paddr + 0x1a0), *(uint8_t *)(paddr + 0x1c0), *(uint8_t *)(paddr + 0x1e0), *(uint8_t *)(paddr + 0x200));
-	//printf("CONTROLS: 0x220: %d, 0x240: %d, 0x260: %d, 0x280: %d, 0x2a0: %d, 0x2c0: %d, 0x2e0: %d, 0x300: %d\n", *(uint8_t *)(paddr + 0x220), *(uint8_t *)(paddr + 0x240), *(uint8_t *)(paddr + 0x260), *(uint8_t *)(paddr + 0x280), *(uint8_t *)(paddr + 0x2a0), *(uint8_t *)(paddr + 0x2c0), *(uint8_t *)(paddr + 0x2e0), *(uint8_t *)(paddr + 0x300));
-
-	rolling_friction(comp);
-}
-//patchCall((void *)(0x005d471c), rolling_friction_wrapper);
-//patchByte((void *)(0x005d471c), 0xe9);
-
 void patchPs2Buttons() {
-	//patchCall((void *)(0x005d471c), rolling_friction_wrapper);
-	//patchByte((void *)(0x005d471c), 0xe9);
-
 	patchByte((void *)(addr_platform + 2), 0x05);	// change PC platform to ps2.  this just makes it default to ps2 controls
-	//patchByte((void *)(0x0046ef29 + 2), 0x05);	// do ps2 things if xbox
 
 	// in air
 	patchByte((void *)(addr_r2l2_air), 0x75);
@@ -975,25 +1176,6 @@ void patchInput() {
 	// some config call relating to the dinput devices
 	patchNop(addr_deinit_dinput, 5);
 
-	patchJmp(addr_procevents, processEvents);
-
-	// poll events during fmvs and when unfocused
-	// cmp shouldquit, 1: 80 3d 98 21 8b 00 01
-	// unfocused
-	//patchNop(addr_unfocuspoll - 5, 53);
-	//patchCall(addr_unfocuspoll, processEventsUnfocused);
-
-	//patchNop(addr_fmvunfocuspoll, 48);
-	//patchCall(addr_fmvunfocuspoll, processEventsUnfocused);
-	
-	// fmv
-	/*patchNop(addr_fmvpoll, 41);
-	patchCall(addr_fmvpoll, processEventsUnfocused);
-	patchByte(addr_fmvpoll + 5, 0x80);
-	patchByte(addr_fmvpoll + 6, 0x80);
-	patchDWord(addr_fmvpoll + 7, shouldQuit);
-	patchByte(addr_fmvpoll + 11, 0x01);
-	patchByte(addr_fmvpoll + 12, 0x75);
-	patchByte(addr_fmvpoll + 13, 0x38);*/
-
+	// fix chat handler to be able to detect f1
+	patchByte(0x00533651 + 1, 0x1f);
 }
