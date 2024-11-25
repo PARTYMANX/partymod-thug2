@@ -2,15 +2,14 @@
 This is a patch for THUG2 to improve its input handling as well as smooth out a few other parts of the PC port.
 The patch is designed to keep the game as original as possible, and leave its files unmodified.
 
-This patch was originally developed to provide input patches to be integrated into reTHAWed.  Thanks to the reTHAWed team (especially uzis and trxbail) for some assistance and inspiring this patch!
+Shoutouts to gone and the ClownJob'd patch that inspired much of this patch, and shoutouts to trxbail, who pointed me toward a few fixes!
 
 ### Features and Fixes
 * Replaced input system entirely with new, modern system using the SDL2 library
 * Improved window handling allowing for custom resolutions and configurable windowing (NOTE: when using widescreen or portrait resolutions, the main menu is always forced to 4:3 using black bars to preserve the menu text's positioning)
 * Replaced configuration files with new INI-based system (see partymod.ini)
 * Custom configurator program to handle new configuration files
-* Controller glyphs are now shown in prompts when using a controller
-* Controller glyph style is configurable between PS2, Xbox, and Gamecube style
+* Controller glyphs are now shown in prompts when using a controller (Controller glyph style is configurable between PS2, Xbox, and Gamecube style) (NOTE: because of the way glyph code is rewritten in this version, some prompts will be incorrect)
 * Restores the on-screen keyboard
 * Restores quick chat and keyboard taunt binds
 * Adds entropy to music shuffling to make sure it doesn't repeat between sessions (while consuming the same number of random numbers)

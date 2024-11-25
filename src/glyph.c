@@ -55,7 +55,7 @@ uint8_t __cdecl shouldUseGlyph(uint8_t idx) {
 	if (getUsingKeyboard()) {
 		return idx >= 0x04 && idx <= 0x0D;
 	} else {
-		return idx < 0x11;
+		return idx <= 0x11;
 	}
 }
 
