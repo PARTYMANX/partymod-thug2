@@ -59,14 +59,17 @@ void enforceMaxResolution() {
 void loadWindowSettings();
 
 void handleWindowEvent(SDL_Event *e) {
+	int *recreateDevice = (int *)addr_recreatedevice;
+
 	switch (e->type) {
 		case SDL_WINDOWEVENT:
 			if (e->window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
-				int *recreateDevice = (int *)addr_recreatedevice;
-				*recreateDevice = 1;
+				*recreateDevice = 0;
 
 				*isFocused = 0;
 			} else if (e->window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
+				*recreateDevice = 1;
+
 				*isFocused = 1;
 			}
 			return;
@@ -149,6 +152,11 @@ void patchWindow() {
 	patchDWord(0x004b6c63 + 1, &resbuffer);
 
 	patchNop(0x004d8891, 14);	// don't move window to corner
+
+	patchByte(0x004d8989, 0xeb);	// don't hide cursor
+
+	patchByte(0x004d869c, 0xeb);	// don't call showwindow
+	patchNop(0x004e277d, 20);	// don't call showwindow
 }
 
 void loadWindowSettings() {

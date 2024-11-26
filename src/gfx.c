@@ -126,7 +126,7 @@ void setLetterbox(int isLetterboxed) {
 	//printf("MULT X: %f, MULT Y: %f\n", *conv_x_multiplier, *conv_y_multiplier);
 	//printf("OFFSET X: %d, OFFSET Y: %d\n", *conv_x_offset, *conv_y_offset);
 
-	*letterbox_active = 1;
+	*letterbox_active = isLetterboxed;
 }
 
 void setDisplayRegion() {
@@ -155,7 +155,19 @@ void renderWorldWrapper() {
 	void (*renderWorld)() = 0x0048c330;
 	renderWorld();
 
-	setLetterbox(1);
+	uint8_t *letterbox_active = 0x00786cbe;
+
+	if (getCurrentLevel() == 0) {
+		if (*letterbox_active != 1) {
+			setLetterbox(1);
+		}
+	} else {
+		// NOTE: the only reason we can't leave this on is because it breaks split screen in a very funny way (both screens render on top of each other and share a depth buffer)
+		if (*letterbox_active != 0) {
+			setLetterbox(0);
+		}
+	}
+	
 }
 
 #include <d3d9.h>

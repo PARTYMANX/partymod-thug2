@@ -11,8 +11,8 @@ char *buttonsNgc = "ButtonsNgc";
 char *meta_button_map_ps2 = "meta_button_map_ps2";
 char *meta_button_map_gamecube = "meta_button_map_gamecube";
 
-// in the pc release, all button tags were changed from meta button mapped values to explicit buttons
-// this wrapper re-translates them into the original numbers, reflecting the xbox meta button map
+// in the pc release, most button tags were changed from meta button mapped values to explicit buttons
+// this wrapper re-translates them into rough equivalents for a controller using xbox layout
 uint32_t dehexifyDigitWrapper(uint8_t *button) {
 	uint32_t (*orig_dehexify)(uint8_t *) = 0x004020e0;
 
@@ -55,7 +55,7 @@ uint8_t __cdecl shouldUseGlyph(uint8_t idx) {
 	if (getUsingKeyboard()) {
 		return idx >= 0x04 && idx <= 0x0D;
 	} else {
-		return idx <= 0x11;
+		return idx <= 17;
 	}
 }
 
@@ -66,6 +66,7 @@ uint8_t getGlyphStyleSetting() {
 void patchButtonGlyphs() {
 	uint8_t glyphStyle = getGlyphStyleSetting();
 
+	// load the appropriate glyph font and meta button map for glyph style (this only affects the basic menu control prompts)
 	if (glyphStyle == 1) {
 		patchDWord(0x0048d97f + 4, buttonsPs2);
 		patchDWord(0x0048d8f7 + 1, meta_button_map_ps2);
