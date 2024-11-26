@@ -149,14 +149,14 @@ struct inputsettings {
 
 void patchPs2Buttons();
 
-uint8_t *addr_platform = (void *)(0x0051f4c0);	// 83 f8 07 56 c7 44 24 04 00 00 00 00
+uint8_t *addr_platform = (void *)(0x0051f4c6);	// 83 f8 07 56 c7 44 24 04 00 00 00 00
 uint8_t *addr_r2l2_air = (void *)(0x0050cf89);	// 8a 93 80 00 00 00 84 d2 74 0a
 uint8_t *addr_r2l2_break_vert1 = (void *)(0x00507184);	// 8a 87 80 00 00 00 84 c0 74 0a
 uint8_t *addr_r2l2_break_vert2 = (void *)(0x005071ae);	// 8a 87 80 00 00 00 84 c0 74 0e
 uint8_t *addr_r2l2_lip = (void *)(0x004fcc59);	// 8a 87 80 00 00 00 84 c0 0f 84 92 00 00 00
 uint8_t *addr_r2l2_air_recover = (void *)(0x0050cac4);	// 8a 83 80 00 00 00 84 c0 74 11
-uint8_t *addr_r2l2_groundair = (void *)(0x005dea30);	// 8a 85 80 00 00 00 84 c0 74 0a
-uint8_t *addr_r2l2_groundair_acid1 = (void *)(0x005deff3);	// 8a 85 80 00 00 00 84 c0 74 3a
+uint8_t *addr_r2l2_groundair = (void *)(0x0050a257);	// 8a 85 80 00 00 00 84 c0 74 0a
+uint8_t *addr_r2l2_groundair_acid1 = (void *)(0x00509e47);	// 8a 85 80 00 00 00 84 c0 74 3a
 uint8_t *addr_r2l2_acid_drop = (void *)(0x0050da64);	// 8a 88 80 00 00 00 84 c9 74 0a
 uint8_t *addr_r2l2_walk_acid1 = (void *)(0x00527546);	// 8a 88 a0 00 00 00 83 c0 20 84 c9 0f 84 cb 00 00 00
 uint8_t *addr_r2l2_walk_acid2 = (void *)(0x00527636);	// 8a 88 a0 00 00 00 83 c0 20 84 c9 0f 84 cb 00 00 00
@@ -172,7 +172,7 @@ uint8_t *addr_device_processs = 0x005bdcc0; // 8b 81 d8 00 00 00 48 c6 81 e4 00 
 uint8_t *addr_call_device_read = 0x005bda33; // e8 ?? ?? ?? ?? 8b 8e d8 00 00 00 b8 02 00 00 00
 uint8_t *addr_set_actuators = 0x005f3a50; // 83 ec 44 55 56 8b 74 24 50
 uint8_t *addr_init_dinput = 0x005f459d; // 6a 00 68 ?? ?? ?? ?? 68 ?? ?? ?? ?? 68 00 08 00 00 50 e8
-uint8_t *addr_deinit_dinput = 0x005f39e0; // e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? 6a 01 6a 00 6a 00
+uint8_t *addr_deinit_dinput = 0x004e2c16; // e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? e8 ?? ?? ?? ?? 6a 01 6a 00 6a 00
 uint8_t *addr_unfocuspoll = 0x005f56e0;
 
 int controllerCount;
@@ -1138,7 +1138,7 @@ void __stdcall initManager() {
 }
 
 void patchPs2Buttons() {
-	patchByte((void *)(addr_platform + 2), 0x05);	// change PC platform to ps2.  this just makes it default to ps2 controls
+	patchByte((void *)(addr_platform + 2), 0x05);	// change xbox platform to something else to just skip it
 
 	// in air
 	patchByte((void *)(addr_r2l2_air), 0x75);
