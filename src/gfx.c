@@ -1,6 +1,7 @@
 #include <gfx.h>
 
 #include <stdint.h>
+#include <math.h>
 
 #include <patch.h>
 #include <config.h>
@@ -182,7 +183,9 @@ void draw2DWrapper() {
 	void (*draw2d)() = 0x004dfb90;
 	void (*setTexture)(int, int, int) = 0x004da730;
 	float *conv_x_multiplier = 0x00786d80;
+	float *conv_y_multiplier = 0x00786d84;
 	uint32_t *conv_x_offset = 0x00786d88;
+	uint32_t *conv_y_offset = 0x00786d8c;
 	uint32_t *backbuffer_height = 0x00786d70;
 	uint32_t *backbuffer_width = 0x00786d6c;
 
@@ -191,28 +194,48 @@ void draw2DWrapper() {
 	float backbufferAspect = (float)*backbuffer_width / (float)*backbuffer_height;
 
 	if (backbufferAspect > getDesiredAspectRatio()) {
-		uint32_t width = (*conv_x_multiplier) * 640;
+		uint32_t width = round((*conv_x_multiplier) * 640.0f);
 		uint32_t barwidth = (*backbuffer_width - width) / 2;
 
 		setTexture(0, 0, 0);	// unbind texture
 
 		struct blackBarVertex blackBar[4] = {
-			{0.0f, 0.0f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
-			{0.0f, *backbuffer_height, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
-			{barwidth, *backbuffer_height, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
-			{barwidth, 0.0f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+			{-0.5f, -0.5f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+			{-0.5f, *backbuffer_height + 0.5f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+			{barwidth + 0.5f, *backbuffer_height + 0.5f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+			{barwidth + 0.5f, -0.5f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
 		};
 
-		IDirect3DDevice9_DrawPrimitiveUP(*(IDirect3DDevice9 **)0x007d69e0, D3DPT_TRIANGLEFAN, 4, blackBar, sizeof(struct blackBarVertex));
+		IDirect3DDevice9_DrawPrimitiveUP(*(IDirect3DDevice9 **)0x007d69e0, D3DPT_TRIANGLEFAN, 2, blackBar, sizeof(struct blackBarVertex));
 
 		blackBar[0].x += width + barwidth;
 		blackBar[1].x += width + barwidth;
 		blackBar[2].x += width + barwidth;
 		blackBar[3].x += width + barwidth;
 
-		IDirect3DDevice9_DrawPrimitiveUP(*(IDirect3DDevice9 **)0x007d69e0, D3DPT_TRIANGLEFAN, 4, blackBar, sizeof(struct blackBarVertex));
+		IDirect3DDevice9_DrawPrimitiveUP(*(IDirect3DDevice9 **)0x007d69e0, D3DPT_TRIANGLEFAN, 2, blackBar, sizeof(struct blackBarVertex));
+	} else if (backbufferAspect < getDesiredAspectRatio()) {
+		uint32_t height = round((*conv_y_multiplier) * 480.0f);
+		uint32_t barheight = (*backbuffer_height - height) / 2;
+
+		setTexture(0, 0, 0);	// unbind texture
+
+		struct blackBarVertex blackBar[4] = {
+			{-0.5f, -0.5f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+			{-0.5f, barheight + 0.5f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+			{*backbuffer_width + 0.5f, barheight + 0.5f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+			{*backbuffer_width + 0.5f, -0.5f, 0.0f, 1.0f, 0xff000000, 0.0f, 0.0f},
+		};
+
+		IDirect3DDevice9_DrawPrimitiveUP(*(IDirect3DDevice9 **)0x007d69e0, D3DPT_TRIANGLEFAN, 2, blackBar, sizeof(struct blackBarVertex));
+
+		blackBar[0].y += height + barheight;
+		blackBar[1].y += height + barheight;
+		blackBar[2].y += height + barheight;
+		blackBar[3].y += height + barheight;
+
+		IDirect3DDevice9_DrawPrimitiveUP(*(IDirect3DDevice9 **)0x007d69e0, D3DPT_TRIANGLEFAN, 2, blackBar, sizeof(struct blackBarVertex));
 	}
-	
 }
 
 void patchLetterbox() {
