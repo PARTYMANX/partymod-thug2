@@ -43,18 +43,29 @@ void patchPlaylistShuffle() {
 	patchCall(addr_shuffle2, our_random);
 }
 
-/*uint32_t __fastcall calcAvailableSpaceFudged(uint8_t *param1) {
-	uint32_t *pTotalSpace = 0x0068ec38;
+uint32_t __fastcall calcAvailableSpaceFudged(uint8_t *param1) {
 	if (*(param1 + 0xc)) {
-		uint64_t freeSpace = 0;
-		uint64_t totalSpace = 0;
-		GetDiskFreeSpaceEx(NULL, &freeSpace, &totalSpace, NULL);
+		ULARGE_INTEGER freeSpace;
+		ULARGE_INTEGER totalSpace;
+		uint8_t result = GetDiskFreeSpaceEx(NULL, &freeSpace, &totalSpace, NULL);
 
+		if (result) {
+			uint64_t space = freeSpace.QuadPart >> 14;
 
-	} else {
-		return 0;
+			if (space > UINT32_MAX - (UINT16_MAX * 2)) {
+				space = UINT32_MAX - (UINT16_MAX * 2);	// clamp to a number that should fit anything and allow a bit of math (number from ClownJob'd release notes)
+			}
+
+			return space;
+		}
 	}
-}*/
+
+	return 0;
+}
+
+void patchCalcAvailableSpace() {
+	patchCall(0x005a6e7e, calcAvailableSpaceFudged);
+}
 
 uint32_t rng_seed = 0;
 
@@ -184,6 +195,7 @@ __declspec(dllexport) BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, L
 			patchGfx();
 			patchScriptHook();
 			patchPlaylistShuffle();
+			patchCalcAvailableSpace();
 
 			break;
 
