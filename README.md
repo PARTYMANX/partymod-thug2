@@ -9,7 +9,7 @@ Shoutouts to gone and the ClownJob'd patch that inspired much of this patch, and
 * Improved window handling allowing for custom resolutions and configurable windowing (NOTE: when using widescreen or portrait resolutions, the main menu is always forced to 4:3 using black bars to preserve the menu text's positioning)
 * Replaced configuration files with new INI-based system (see partymod.ini)
 * Custom configurator program to handle new configuration files
-* Controller glyphs are now shown in prompts when using a controller (Controller glyph style is configurable between PS2, Xbox, and Gamecube style) (NOTE: because of the way glyph code is rewritten in this version, some prompts will be incorrect)
+* Controller glyphs are now shown in prompts when using a controller. Controller glyph style is configurable between PS2, Xbox, and Gamecube style. Glyphs can be forced for keyboard players using the "prefer glyphs" setting NOTE: because of the way glyph code is rewritten in this version, some prompts will be incorrect
 * Restores the on-screen keyboard
 * Restores quick chat and keyboard taunt binds
 * Adds entropy to music shuffling to make sure it doesn't repeat between sessions (while consuming the same number of random numbers)
@@ -17,6 +17,9 @@ Shoutouts to gone and the ClownJob'd patch that inspired much of this patch, and
 * Fixes screen flash effect covering only part of the screen (E.G. when doing a Franklin Grind)
 * Optionally disables blur for graphics drivers that show severe artifacts
 * Replaces online service with OpenSpy
+* Movies now check for input every frame (as opposed to every five), making skipping much quicker
+* Movies' aspect ratios are now respected, showing black bars when appropriate
+* Cleanup code is now skipped on exit, so the game exits much faster
 
 ### Installation
 1. Download PARTYMOD from the releases tab

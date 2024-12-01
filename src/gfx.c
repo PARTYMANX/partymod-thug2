@@ -69,7 +69,14 @@ float getDesiredAspectRatio() {
 float __cdecl getScreenAngleFactor() {
 	float aspect = getDesiredAspectRatio();
 
-	float result = ((aspect / (4.0f / 3.0f)));
+	float result;
+
+	if (aspect > (4.0f / 3.0f)) {
+		result = ((aspect / (4.0f / 3.0f)));
+	} else {
+		// if aspect ratio is less than 4:3, don't reduce horizontal FOV, instead, increase vertical FOV
+		result = 1.0f;
+	}
 
 	//printf("angle: 0x%08x, 0x%08x, %f %f, %d, x%f, off %d\n", addr_getscreenangfactor + 2, orig_screenanglefactor, *orig_screenanglefactor, result, *isLetterboxed, *viewportYMult, *viewportYOffset);
 	//*isLetterboxed = 1;
@@ -295,6 +302,70 @@ void patchBlur() {
 	patchJmp(0x004b2330, setBlurWrapper);
 }
 
+uint32_t movie_width;
+uint32_t movie_height;
+
+struct movieVertex {
+	float x, y, z, w;
+	uint32_t color;
+	float u, v;
+};
+
+void movie_setTexture(int index, IDirect3DTexture9 *tex, int unk) {
+	void (*setTexture)(int, int, int) = 0x004da730;
+
+	D3DSURFACE_DESC desc;
+
+	IDirect3DTexture9_GetLevelDesc(tex, 0, &desc);
+
+	movie_width = desc.Width;
+	movie_height = desc.Height;
+
+	setTexture(index, tex, unk);
+}
+
+void __stdcall movie_drawPrim(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE type, uint32_t numPrims, struct movieVertex *vertices, uint32_t stride) {
+	uint32_t *backbuffer_height = 0x00786d70;
+	uint32_t *backbuffer_width = 0x00786d6c;
+
+	//float targetAspect = (float)movie_width / (float)movie_height;
+	float targetAspect = 4.0f / 3.0f;	// while my programmer brain says "respect the original size!" the devs said "what if the credits were anamorphic 1:1"
+	float backbufferAspect = (float)*backbuffer_width / (float)*backbuffer_height;
+
+	float target_width = *backbuffer_width;
+	float target_height = *backbuffer_height;
+	float target_offset_x = 0.0f;
+	float target_offset_y = 0.0f;
+
+	if (backbufferAspect > targetAspect) {
+		target_width = (targetAspect / backbufferAspect) * *backbuffer_width;
+		target_offset_x = (*backbuffer_width - target_width) / 2;
+	} else if (backbufferAspect < targetAspect) {
+		target_height = (backbufferAspect / targetAspect) * *backbuffer_height;
+		target_offset_y = (*backbuffer_height - target_height) / 2;
+	}
+
+	vertices[0].x = target_offset_x;
+	vertices[0].y = target_offset_y;
+
+	vertices[1].x = target_offset_x + target_width;
+	vertices[1].y = target_offset_y;
+
+	vertices[2].x = target_offset_x;
+	vertices[2].y = target_offset_y + target_height;
+
+	vertices[3].x = target_offset_x + target_width;
+	vertices[3].y = target_offset_y + target_height;
+
+	IDirect3DDevice9_DrawPrimitiveUP(dev, type, numPrims, vertices, stride);
+}
+
+void patchMovieBlackBars() {
+	patchCall(0x0044fb8c, movie_setTexture);
+	patchCall(0x0044fc88, movie_drawPrim);
+	patchNop(0x0044fc88 + 5, 1);
+}
+
 void loadGfxSettings() {
 	graphics_settings.antialiasing = getConfigBool(CONFIG_GRAPHICS_SECTION, "AntiAliasing", 0);
 	graphics_settings.hq_shadows = getConfigBool(CONFIG_GRAPHICS_SECTION, "HQShadows", 0);
@@ -316,5 +387,7 @@ void patchGfx() {
 	patchLetterbox();
 	patchScreenFlash();
 
-	patchFloat(0x004db357 + 6, 64000.0f);	// expand default clipping distance to avoid issues in large level backgrounds (I.E. skatopia)
+	patchFloat(0x004db357 + 6, 96000.0f);	// expand default clipping distance to avoid issues in large level backgrounds (I.E. skatopia)
+
+	patchMovieBlackBars();
 }
