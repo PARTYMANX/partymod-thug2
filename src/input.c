@@ -165,6 +165,7 @@ uint8_t *addr_spin_delay2 = (void *)(0x0050430b);
 
 uint8_t *addr_isKeyboardOnScreen = 0x007ce46e;
 uint8_t *addr_isInMenu = 0x007ce46f;
+uint8_t *addr_otherIsInMenu = 0x007ce46c;
 void (*key_input)(int32_t key, uint32_t param) = (void *)0x005bde70;
 uint8_t *unk2 = 0x007ccdf8;
 uint8_t *unk3 = 0x007ce46f;
@@ -584,25 +585,25 @@ void processMenuBinds(uint8_t *keyStates) {
 uint8_t getKeyState(uint8_t *keyStates, uint8_t key) {
 	switch (key) {
 	case SDL_SCANCODE_RETURN:
-		return menuKeyStates.affirmative != LOCKOUT && keyStates[key];
+		return menuKeyStates.affirmative != LOCKOUT && (!isInMenu && keyStates[key]);
 	case SDL_SCANCODE_ESCAPE:
-		return menuKeyStates.negative != LOCKOUT && keyStates[key];
+		return menuKeyStates.negative != LOCKOUT && (!isInMenu && keyStates[key]);
 	case SDL_SCANCODE_E:
-		return menuKeyStates.menu != LOCKOUT && keyStates[key];
+		return menuKeyStates.menu != LOCKOUT && (!isInMenu && keyStates[key]);
 	case SDL_SCANCODE_R:
-		return menuKeyStates.extra != LOCKOUT && keyStates[key];
+		return menuKeyStates.extra != LOCKOUT && (!isInMenu && keyStates[key]);
 	case SDL_SCANCODE_UP:
-		return menuKeyStates.up != LOCKOUT && keyStates[key];
+		return menuKeyStates.up != LOCKOUT && (!isInMenu && keyStates[key]);
 	case SDL_SCANCODE_DOWN:
-		return menuKeyStates.down != LOCKOUT && keyStates[key];
+		return menuKeyStates.down != LOCKOUT && (!isInMenu && keyStates[key]);
 	case SDL_SCANCODE_LEFT:
-		return menuKeyStates.left != LOCKOUT && keyStates[key];
+		return menuKeyStates.left != LOCKOUT && (!isInMenu && keyStates[key]);
 	case SDL_SCANCODE_RIGHT:
-		return menuKeyStates.right != LOCKOUT && keyStates[key];
+		return menuKeyStates.right != LOCKOUT && (!isInMenu && keyStates[key]);
 	case SDL_SCANCODE_1:
-		return menuKeyStates.rot_left != LOCKOUT && keyStates[key];
+		return menuKeyStates.rot_left != LOCKOUT && (!isInMenu && keyStates[key]);
 	case SDL_SCANCODE_2:
-		return menuKeyStates.rot_right != LOCKOUT && keyStates[key];
+		return menuKeyStates.rot_right != LOCKOUT && (!isInMenu && keyStates[key]);
 	default:
 		return keyStates[key];
 	}
@@ -622,13 +623,13 @@ void pollKeyboard(device *dev) {
 	}
 
 	// buttons
-	if (getKeyState(keyboardState, keybinds.menu)) {	// NOTE: menu is also always hardcoded to esc
+	if (getKeyState(keyboardState, keybinds.menu)) {
 		dev->controlData[2] |= 0x01 << 3;
 	}
 	if (getKeyState(keyboardState, keybinds.cameraToggle)) {
 		dev->controlData[2] |= 0x01 << 0;
 	}
-	if (getKeyState(keyboardState, keybinds.focus)) {	// no control for left stick on keyboard
+	if (getKeyState(keyboardState, keybinds.focus)) {
 		dev->controlData[2] |= 0x01 << 1;
 	}
 	if (getKeyState(keyboardState, keybinds.cameraSwivelLock)) {
