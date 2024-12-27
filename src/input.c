@@ -467,7 +467,7 @@ void pollController(device *dev, SDL_GameController *controller) {
 uint8_t isInParkEditor() {
 	void **ScreenElementManager = 0x00701440;
 	uint32_t *(__fastcall *ScreenElementManager_GetElement)(void *, void *, void *, uint32_t, uint32_t) = 0x004aae20;
-	void (__fastcall *element_destroy_maybe)(void *) = 0x004637e0;
+	void (__fastcall *element_destroy_maybe)(void *, void *, void *) = 0x004637e0;
 	if (*ScreenElementManager) {
 		int unk[4] = {0, 0, 0, 0};	// honestly, a complete mystery to me.  this seems to be the same thing returned?  is this some compiler magic for struct returns?
 
@@ -764,7 +764,7 @@ void __fastcall processController(device *dev, void *pad, device *also_dev) {
 	dev->vibrationData_max[0] = 255;
 	dev->vibrationData_max[1] = 255;
 	dev->state = 2;
-	dev->actuatorsDisabled = 0;
+	//dev->actuatorsDisabled = 0;
 
 	handleEvents();
 

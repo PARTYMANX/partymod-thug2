@@ -16,7 +16,7 @@
 
 // there has got to be a better way to write this
 HWND *hwnd = 0x007d6a28;
-int *isFocused = 0x007ccbe4;
+uint8_t *isFocused = 0x007ccbe4;
 uint32_t *resolution_setting = 0x007d643c;
 uint8_t *addr_recreatedevice = 0x00786ab4;
 
@@ -57,7 +57,7 @@ void enforceMaxResolution() {
 void loadWindowSettings();
 
 void handleWindowEvent(SDL_Event *e) {
-	int *recreateDevice = (int *)addr_recreatedevice;
+	uint8_t *recreateDevice = (uint8_t *)addr_recreatedevice;
 
 	switch (e->type) {
 		case SDL_WINDOWEVENT:

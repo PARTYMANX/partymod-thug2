@@ -15,6 +15,14 @@ char *allocOnlineServiceString(char *fmt, char *url) {
 	return result;
 }
 
+void patchMotdFix() {
+	patchDWord(0x00545b4e + 1, 0x000001f4);
+	patchDWord(0x00545cdd + 1, 0x588ed87c);
+	patchByte(0x00545ce2 + 6, 0x01);
+
+	patchNop(0x005a8a01, 2);
+}
+
 void patchOnlineService() {
 	// NOTE: these will leak and that's a-okay
 	char *url[256];
@@ -64,4 +72,6 @@ void patchOnlineService() {
 	// gpsp.gamespy.com
 	char *gpsp = allocOnlineServiceString("gpsp.%s", url);
 	patchDWord(0x006182bd + 1, gpsp);
+
+	patchMotdFix();
 }

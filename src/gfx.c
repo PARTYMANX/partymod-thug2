@@ -9,7 +9,7 @@
 
 uint8_t *antialiasing = 0x007d6434;
 uint8_t *hq_shadows = 0x007d6435;
-uint32_t *distance_clipping = 0x007d643a;
+uint8_t *distance_clipping = 0x007d643a;
 uint32_t *clipping_distance = 0x007d6444;	// int from 1-100
 uint8_t *fog = 0x007d6436;
 uint8_t *addr_setaspectratio = 0x004a0780;
@@ -302,6 +302,15 @@ void patchBlur() {
 	patchJmp(0x004b2330, setBlurWrapper);
 }
 
+void restoreBlur() {
+	// some executables "in the wild" patch out blur already, so restore it if that's the case
+	patchByte(0x0048c170, 0x51);
+	patchByte(0x0048c170 + 1, 0x8b);
+	patchByte(0x0048c170 + 2, 0x4c);
+	patchByte(0x0048c170 + 3, 0x24);
+	patchByte(0x0048c170 + 4, 0x08);
+}
+
 uint32_t movie_width;
 uint32_t movie_height;
 
@@ -375,6 +384,8 @@ void loadGfxSettings() {
 
 	if (getConfigBool(CONFIG_GRAPHICS_SECTION, "DisableBlur", 1)) {
 		patchBlur();
+	} else {
+		restoreBlur();
 	}
 }
 
