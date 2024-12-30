@@ -359,6 +359,34 @@ void getStick(SDL_GameController *controller, controllerStick stick, uint8_t *xO
 	}
 }
 
+uint8_t isInParkEditor() {
+	void** ScreenElementManager = 0x00701440;
+	uint32_t* (__fastcall * ScreenElementManager_GetElement)(void*, void*, void*, uint32_t, uint32_t) = 0x004aae20;
+	void(__fastcall * element_destroy_maybe)(void*, void*, void*) = 0x004637e0;
+	if (*ScreenElementManager) {
+		int unk[4] = { 0, 0, 0, 0 };	// honestly, a complete mystery to me.  this seems to be the same thing returned?  is this some compiler magic for struct returns?
+
+		uint32_t* result = ScreenElementManager_GetElement(*ScreenElementManager, NULL, unk, 0x5999551E, 0);
+
+		if (result && *result) {
+			if (unk[0]) {
+				element_destroy_maybe(unk[0], NULL, unk);
+			}
+
+			return 1;
+		}
+		else {
+			return 0;
+		}
+	}
+	else {
+		return 0;
+	}
+}
+
+uint8_t isInMenu = 0;
+uint8_t isEditingPark = 0;
+
 void pollController(device *dev, SDL_GameController *controller) {
 	if (SDL_GameControllerGetAttached(controller)) {
 		dev->isValid = 1;
@@ -405,38 +433,70 @@ void pollController(device *dev, SDL_GameController *controller) {
 			if (getButton(controller, padbinds.rightSpin)) {
 				dev->controlData[3] |= 0x01 << 3;
 				dev->controlData[17] = 0xff;
+				if (isEditingPark) {
+					dev->controlData[20] |= 0x01 << 0;	// act as black when editing park
+				}
 			}
 
 			if (getButton(controller, padbinds.nollie)) {
 				dev->controlData[3] |= 0x01 << 0;
 				dev->controlData[18] = 0xff;
+				if (isInMenu) {
+					dev->controlData[20] |= 0x01 << 1;	// act as white when in menu
+				}
 			}
 
 			if (getButton(controller, padbinds.switchRevert)) {
 				dev->controlData[3] |= 0x01 << 1;
 				dev->controlData[19] = 0xff;
+				if (isInMenu) {
+					dev->controlData[20] |= 0x01 << 0;	// act as black when in menu
+				} else if (isEditingPark) {
+					dev->controlData[20] |= 0x01 << 1;	// act as white when editing park
+				}
 			}
 		} else {
-			if (getButton(controller, padbinds.nollie)) {
-				dev->controlData[3] |= 0x01 << 2;
-				dev->controlData[16] = 0xff;
-				dev->controlData[3] |= 0x01 << 0;
-				dev->controlData[18] = 0xff;
-			}
+			if (isEditingPark && !(*addr_isKeyboardOnScreen)) {
+				// when editing a park, right trigger acts as l1
+				if (getButton(controller, padbinds.switchRevert)) {
+					dev->controlData[3] |= 0x01 << 2;
+					dev->controlData[16] = 0xff;
+				}
 
-			if (getButton(controller, padbinds.switchRevert)) {
-				dev->controlData[3] |= 0x01 << 3;
-				dev->controlData[17] = 0xff;
-				dev->controlData[3] |= 0x01 << 1;
-				dev->controlData[19] = 0xff;
-			}
+				if (getButton(controller, padbinds.nollie)) {
+					dev->controlData[3] |= 0x01 << 0;
+					dev->controlData[18] = 0xff;
+				}
 
-			if (getButton(controller, padbinds.leftSpin)) {
-				dev->controlData[20] |= 0x01 << 1;
+				if (getButton(controller, padbinds.leftSpin)) {
+					dev->controlData[20] |= 0x01 << 1;
+				}
+				if (getButton(controller, padbinds.rightSpin)) {
+					dev->controlData[20] |= 0x01 << 0;
+				}
 			}
+			else {
+				if (getButton(controller, padbinds.nollie)) {
+					dev->controlData[3] |= 0x01 << 2;
+					dev->controlData[16] = 0xff;
+					dev->controlData[3] |= 0x01 << 0;
+					dev->controlData[18] = 0xff;
+				}
 
-			if (getButton(controller, padbinds.rightSpin)) {
-				dev->controlData[20] |= 0x01 << 0;
+				if (getButton(controller, padbinds.switchRevert)) {
+					dev->controlData[3] |= 0x01 << 3;
+					dev->controlData[17] = 0xff;
+					dev->controlData[3] |= 0x01 << 1;
+					dev->controlData[19] = 0xff;
+				}
+
+				if (getButton(controller, padbinds.leftSpin)) {
+					dev->controlData[20] |= 0x01 << 1;
+				}
+
+				if (getButton(controller, padbinds.rightSpin)) {
+					dev->controlData[20] |= 0x01 << 0;
+				}
 			}
 		}
 		
@@ -464,32 +524,8 @@ void pollController(device *dev, SDL_GameController *controller) {
 	}
 }
 
-uint8_t isInParkEditor() {
-	void **ScreenElementManager = 0x00701440;
-	uint32_t *(__fastcall *ScreenElementManager_GetElement)(void *, void *, void *, uint32_t, uint32_t) = 0x004aae20;
-	void (__fastcall *element_destroy_maybe)(void *, void *, void *) = 0x004637e0;
-	if (*ScreenElementManager) {
-		int unk[4] = {0, 0, 0, 0};	// honestly, a complete mystery to me.  this seems to be the same thing returned?  is this some compiler magic for struct returns?
-
-		uint32_t *result = ScreenElementManager_GetElement(*ScreenElementManager, NULL, unk, 0x5999551E, 0);
-
-		if (result && *result) {
-			if (unk[0]) {
-				element_destroy_maybe(unk[0], NULL, unk);
-			}
-
-			return 1;
-		} else {
-			return 0;
-		}
-	} else {
-		return 0;
-	}
-}
-
 uint8_t prev_in_menu = 0;
 uint8_t prev_in_keyboard = 0;
-uint8_t isInMenu = 0;
 
 #define LOCKOUT 2
 struct menuKeys {
@@ -503,6 +539,14 @@ struct menuKeys {
 	uint8_t right;
 	uint8_t rot_left;	// lb/l1
 	uint8_t rot_right;	// rb/r1
+	uint8_t zoom;	// black (also r2, but that's rerouted to black)
+	// not handling graphic editor transforms now, it is too likely to interfere with desired menu binds
+	/*
+	uint8_t transform_rot_left;	// cam left
+	uint8_t transform_rot_right;	// cam right
+	uint8_t transform_scale_up;	// cam up
+	uint8_t transform_scale_down;	// cam down
+	*/
 };
 
 struct menuKeys menuKeyStates;
@@ -538,11 +582,26 @@ void processMenuBinds(uint8_t *keyStates) {
 		if (keybinds.right != SDL_SCANCODE_RIGHT && menuKeyStates.right == 1) {
 			menuKeyStates.right = LOCKOUT;
 		}
-		if (keybinds.leftSpin != SDL_SCANCODE_1 && menuKeyStates.rot_left == 1) {
-			menuKeyStates.rot_left = LOCKOUT;
-		}
-		if (keybinds.rightSpin != SDL_SCANCODE_2 && menuKeyStates.rot_right == 1) {
-			menuKeyStates.rot_right = LOCKOUT;
+		if (inputsettings.isPs2Controls) {
+			if (keybinds.leftSpin != SDL_SCANCODE_1 && menuKeyStates.rot_left == 1) {
+				menuKeyStates.rot_left = LOCKOUT;
+			}
+			if (keybinds.rightSpin != SDL_SCANCODE_2 && menuKeyStates.rot_right == 1) {
+				menuKeyStates.rot_right = LOCKOUT;
+			}
+			if (keybinds.switchRevert != SDL_SCANCODE_MINUS && menuKeyStates.zoom == 1) {
+				menuKeyStates.zoom = LOCKOUT;
+			}
+		} else {
+			if (keybinds.nollie != SDL_SCANCODE_1 && menuKeyStates.rot_left == 1) {
+				menuKeyStates.rot_left = LOCKOUT;
+			}
+			if (keybinds.switchRevert != SDL_SCANCODE_2 && menuKeyStates.rot_right == 1) {
+				menuKeyStates.rot_right = LOCKOUT;
+			}
+			if (keybinds.rightSpin != SDL_SCANCODE_MINUS && menuKeyStates.zoom == 1) {
+				menuKeyStates.zoom = LOCKOUT;
+			}
 		}
 
 		prev_in_menu = isInMenu;
@@ -580,6 +639,9 @@ void processMenuBinds(uint8_t *keyStates) {
 	if (!(menuKeyStates.rot_right == LOCKOUT && keyStates[SDL_SCANCODE_2])) {
 		menuKeyStates.rot_right = keyStates[SDL_SCANCODE_2];
 	}
+	if (!(menuKeyStates.zoom == LOCKOUT && keyStates[SDL_SCANCODE_MINUS])) {
+		menuKeyStates.zoom = keyStates[SDL_SCANCODE_MINUS];
+	}
 }
 
 uint8_t getKeyState(uint8_t *keyStates, uint8_t key) {
@@ -604,6 +666,8 @@ uint8_t getKeyState(uint8_t *keyStates, uint8_t key) {
 		return menuKeyStates.rot_left != LOCKOUT && (!isInMenu && keyStates[key]);
 	case SDL_SCANCODE_2:
 		return menuKeyStates.rot_right != LOCKOUT && (!isInMenu && keyStates[key]);
+	case SDL_SCANCODE_MINUS:
+		return menuKeyStates.zoom != LOCKOUT && (!isInMenu && keyStates[key]);
 	default:
 		return keyStates[key];
 	}
@@ -614,7 +678,6 @@ void pollKeyboard(device *dev) {
 	dev->isPluggedIn = 1;
 
 	uint8_t *keyboardState = SDL_GetKeyboardState(NULL);
-	isInMenu = (*addr_isInMenu) && !isInParkEditor();
 
 	processMenuBinds(keyboardState);
 
@@ -662,33 +725,65 @@ void pollKeyboard(device *dev) {
 		if (getKeyState(keyboardState, keybinds.rightSpin) || (isInMenu && menuKeyStates.rot_right == 1)) {
 			dev->controlData[3] |= 0x01 << 3;
 			dev->controlData[17] = 0xff;
+			if (isEditingPark) {
+				dev->controlData[20] |= 0x01 << 0;	// act as black when editing park
+			}
 		}
 		if (getKeyState(keyboardState, keybinds.nollie)) {
 			dev->controlData[3] |= 0x01 << 0;
 			dev->controlData[18] = 0xff;
+			if (isInMenu) {
+				dev->controlData[20] |= 0x01 << 1;	// act as white when in menu
+			}
 		}
-		if (getKeyState(keyboardState, keybinds.switchRevert)) {
+		if (getKeyState(keyboardState, keybinds.switchRevert) || (isInMenu && menuKeyStates.zoom == 1)) {
 			dev->controlData[3] |= 0x01 << 1;
 			dev->controlData[19] = 0xff;
+			if (isInMenu) {
+				dev->controlData[20] |= 0x01 << 0;	// act as black when in menu
+			}
+			else if (isEditingPark) {
+				dev->controlData[20] |= 0x01 << 1;	// act as white when editing park
+			}
 		}
 	} else {
-		if (getKeyState(keyboardState, keybinds.nollie) || (isInMenu && menuKeyStates.rot_left == 1)) {
-			dev->controlData[3] |= 0x01 << 2;
-			dev->controlData[16] = 0xff;
-			dev->controlData[3] |= 0x01 << 0;
-			dev->controlData[18] = 0xff;
-		}
-		if (getKeyState(keyboardState, keybinds.switchRevert) || (isInMenu && menuKeyStates.rot_right == 1)) {
-			dev->controlData[3] |= 0x01 << 3;
-			dev->controlData[17] = 0xff;
-			dev->controlData[3] |= 0x01 << 1;
-			dev->controlData[19] = 0xff;
-		}
-		if (getKeyState(keyboardState, keybinds.leftSpin)) {
-			dev->controlData[20] |= 0x01 << 1;
-		}
-		if (getKeyState(keyboardState, keybinds.rightSpin)) {
-			dev->controlData[20] |= 0x01 << 0;
+		if (isEditingPark && !(*addr_isKeyboardOnScreen)) {
+			// when editing a park, right trigger acts as l1
+			if (getKeyState(keyboardState, keybinds.switchRevert)) {
+				dev->controlData[3] |= 0x01 << 2;
+				dev->controlData[16] = 0xff;
+			}
+
+			if (getKeyState(keyboardState, keybinds.nollie)) {
+				dev->controlData[3] |= 0x01 << 0;
+				dev->controlData[18] = 0xff;
+			}
+
+			if (getKeyState(keyboardState, keybinds.leftSpin)) {
+				dev->controlData[20] |= 0x01 << 1;
+			}
+			if (getKeyState(keyboardState, keybinds.rightSpin)) {
+				dev->controlData[20] |= 0x01 << 0;
+			}
+		} else {
+			if (getKeyState(keyboardState, keybinds.nollie) || (isInMenu && menuKeyStates.rot_left == 1)) {
+				dev->controlData[3] |= 0x01 << 2;
+				dev->controlData[16] = 0xff;
+				dev->controlData[3] |= 0x01 << 0;
+				dev->controlData[18] = 0xff;
+			}
+			if (getKeyState(keyboardState, keybinds.switchRevert) || (isInMenu && menuKeyStates.rot_right == 1)) {
+				dev->controlData[3] |= 0x01 << 3;
+				dev->controlData[17] = 0xff;
+				dev->controlData[3] |= 0x01 << 1;
+				dev->controlData[19] = 0xff;
+			}
+			if (getKeyState(keyboardState, keybinds.leftSpin)) {
+				dev->controlData[20] |= 0x01 << 1;
+			}
+			if (getKeyState(keyboardState, keybinds.rightSpin) || (isInMenu && menuKeyStates.zoom == 1)) {
+				dev->controlData[20] |= 0x01 << 0;
+			}
 		}
 	}
 		
@@ -752,6 +847,9 @@ uint8_t isKeyboardTyping() {
 }
 
 void __fastcall processController(device *dev, void *pad, device *also_dev) {
+	isEditingPark = isInParkEditor();
+	isInMenu = (*addr_isInMenu) && !isEditingPark;
+
 	// cheating:
 	// replace type with index
 	//dev->type = 60;
@@ -1182,13 +1280,14 @@ void patchPs2Buttons() {
 	patchByte((void *)(addr_r2l2_acid_drop + 1), 0x0a);
 
 	// walk acid drop
+	// transition?
 	patchNop((void *)(addr_r2l2_walk_acid1), 6);
 	patchByte((void *)(addr_r2l2_walk_acid1), 0x75);
-	patchByte((void *)(addr_r2l2_walk_acid1 + 1), 0x0e);
+	patchByte((void *)(addr_r2l2_walk_acid1 + 1), 0x0c);
 
 	patchNop((void *)(addr_r2l2_walk_acid2), 6);
 	patchByte((void *)(addr_r2l2_walk_acid2), 0x75);
-	patchByte((void *)(addr_r2l2_walk_acid2 + 1), 0x0e);
+	patchByte((void *)(addr_r2l2_walk_acid2 + 1), 0x0c);
 
 	// disable spin delay on l1/r1
 	patchNop((void *)(addr_spin_delay1), 2);
